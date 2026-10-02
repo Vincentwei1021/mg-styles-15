@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN" data-lang="zh">
+<html lang="en" data-lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>15 种 MG 动态设计风格 · 成片、提示词与源码</title>
+<title>15 Motion Design Styles · Films, Prompts and Source</title>
 <meta name="description" content="15 支 10 秒动态设计短片，全部由 AI 按提示词写代码渲染。每种风格附成片、风格说明、完整提示词和源码。 / 15 ten-second motion-design films, each rendered from code by AI from one prompt, with the video, style notes, full prompt and source.">
 <!-- GitHub 仓库地址：部署在 <user>.github.io 上时会自动识别，也可以在这里写死，例如 https://github.com/<user>/<repo> -->
 <meta name="repo" content="">
@@ -11,12 +11,12 @@
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="site/style.css?v=08f26186d7">
 <script>
-  // language before first paint: ?lang= → saved choice → browser language
+  // language before first paint: ?lang= → the visitor's own choice (saved when they press the toggle) → English
   (() => {
     const q = new URLSearchParams(location.search).get('lang');
     let l = q === 'en' || q === 'zh' ? q : null;
-    try { l = l || localStorage.getItem('lang'); } catch (e) { /* private mode */ }
-    l = l || (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+    try { l = l || localStorage.getItem('mg15-lang'); } catch (e) { /* private mode */ }
+    l = l === 'zh' ? 'zh' : 'en';
     document.documentElement.dataset.lang = l;
     document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
   })();
@@ -76,6 +76,6 @@ python3 -m http.server 8000                  <span class="c"><span class="zh"># 
 </footer>
 <script src="site/vendor/highlight.min.js?v=662960b539"></script>
 <script src="site/data.js?v=2140283f3a"></script>
-<script src="site/app.js?v=23554fe108"></script>
+<script src="site/app.js?v=f4b4facffb"></script>
 </body>
 </html>

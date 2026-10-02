@@ -10,15 +10,15 @@
   const TITLE = { zh: '15 种 MG 动态设计风格 · 成片、提示词与源码', en: '15 Motion Design Styles · Films, Prompts and Source' };
 
   // ---------- language ----------
-  const setLang = (l) => {
+  const setLang = (l, save) => {
     const root = document.documentElement;
     root.dataset.lang = l;
     root.lang = l === 'zh' ? 'zh-CN' : 'en';
     document.title = TITLE[l];
-    try { localStorage.setItem('lang', l); } catch (e) { /* private mode */ }
+    if (save) try { localStorage.setItem('mg15-lang', l); } catch (e) { /* private mode */ }
   };
-  setLang(document.documentElement.dataset.lang === 'en' ? 'en' : 'zh');
-  $('#lang').addEventListener('click', () => setLang(document.documentElement.dataset.lang === 'zh' ? 'en' : 'zh'));
+  setLang(document.documentElement.dataset.lang === 'zh' ? 'zh' : 'en', false);   // English unless chosen otherwise
+  $('#lang').addEventListener('click', () => setLang(document.documentElement.dataset.lang === 'zh' ? 'en' : 'zh', true));
 
   // Links into the GitHub repo when the page runs on <user>.github.io (or <meta name="repo"> is set); plain paths otherwise.
   const meta = (n) => (document.querySelector(`meta[name="${n}"]`) || {}).content || '';
