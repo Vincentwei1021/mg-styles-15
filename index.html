@@ -1,56 +1,76 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-lang="zh">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>15 种 MG 动态设计风格 · 成片、提示词与源码</title>
-<meta name="description" content="15 支 10 秒动态设计短片，全部由 AI 按提示词写代码渲染。每种风格附成片、风格说明、完整提示词和源码。">
+<meta name="description" content="15 支 10 秒动态设计短片，全部由 AI 按提示词写代码渲染。每种风格附成片、风格说明、完整提示词和源码。 / 15 ten-second motion-design films, each rendered from code by AI from one prompt, with the video, style notes, full prompt and source.">
 <!-- GitHub 仓库地址：部署在 <user>.github.io 上时会自动识别，也可以在这里写死，例如 https://github.com/<user>/<repo> -->
 <meta name="repo" content="">
 <meta name="repo-branch" content="main">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="site/style.css">
+<script>
+  // language before first paint: ?lang= → saved choice → browser language
+  (() => {
+    const q = new URLSearchParams(location.search).get('lang');
+    let l = q === 'en' || q === 'zh' ? q : null;
+    try { l = l || localStorage.getItem('lang'); } catch (e) { /* private mode */ }
+    l = l || (/^zh/i.test(navigator.language || '') ? 'zh' : 'en');
+    document.documentElement.dataset.lang = l;
+    document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en';
+  })();
+</script>
 </head>
 <body>
+<button class="lang" id="lang" type="button" aria-label="切换语言 / Switch language"><span class="zh">EN</span><span class="en">中文</span></button>
 <header class="hero" id="top">
   <div class="hero-in">
     <div class="kicker">CLAUDE OPUS 5.5 · MOTION DESIGN</div>
-    <h1>15 种 MG 动态设计风格</h1>
-    <p class="sub">盘点达到商用水准的 15 种风格</p>
-    <p class="lede">每支 10 秒的片子都是 AI 按一段提示词写代码做出来的：画面、动画、配乐和音效全部由代码生成。
-      下面每种风格都附上成片、风格说明、完整提示词和全部源码。提示词可以直接复制，拿去做你自己的片子。</p>
-    <nav class="index" id="index" aria-label="风格目录"></nav>
+    <h1><span class="zh">15 种 MG 动态设计风格</span><span class="en">15 Motion Design Styles</span></h1>
+    <p class="sub"><span class="zh">盘点达到商用水准的 15 种风格</span><span class="en">Fifteen styles, made to commercial standard</span></p>
+    <p class="lede"><span class="zh">每支 10 秒的片子都是 AI 按一段提示词写代码做出来的：画面、动画、配乐和音效全部由代码生成。
+      下面每种风格都附上成片、风格说明、完整提示词和全部源码。提示词可以直接复制，拿去做你自己的片子。</span><span class="en">Each
+      10-second film was made by an AI writing code from a single prompt: the picture, the animation, the music and the sound
+      effects all come from code. Every style below comes with the film, a description, the full prompt and all of the source.
+      Copy a prompt and use it to make your own film.</span></p>
+    <nav class="index" id="index"></nav>
   </div>
 </header>
 <div class="bar" id="bar" aria-hidden="true">
-  <a class="bar-title" href="#top">15 种 MG 风格</a>
+  <a class="bar-title" href="#top"><span class="zh">15 种 MG 风格</span><span class="en">15 MG Styles</span></a>
   <nav class="bar-nav" id="bar-nav"></nav>
 </div>
 <main id="films">
-  <noscript><p class="noscript">这个页面需要 JavaScript。也可以直接浏览仓库里的 <code>prompts/</code> 和 <code>demos/</code>。</p></noscript>
+  <noscript><p class="noscript">这个页面需要 JavaScript。也可以直接浏览仓库里的 <code>prompts/</code> 和 <code>demos/</code>。<br>
+    This page needs JavaScript. You can also browse <code>prompts/</code> and <code>demos/</code> in the repository.</p></noscript>
 </main>
 <footer class="foot">
   <div class="foot-in">
     <section>
-      <h3>怎么用这些提示词</h3>
+      <h3><span class="zh">怎么用这些提示词</span><span class="en">How to use the prompts</span></h3>
       <ol>
-        <li>在一个空文件夹里打开能写代码、能执行命令的 AI 助手（例如 Claude Code）。本机需要 Node、Chrome 和 ffmpeg，3D 那支还要 Blender。</li>
-        <li>复制某种风格的提示词，整段发给它。</li>
-        <li>想换成自己的内容：改 <code>Creative seed</code> 里的故事、品牌名、文案和配色，或者改 <code>Output</code> 里的尺寸和时长。<code>Signature features</code> 那段别删，它决定这种风格能不能被一眼认出来。</li>
-        <li>想再提高：成片出来后，另开一个 AI 用 <a data-repo="rubric.md" href="rubric.md">rubric.md</a> 评审，把意见贴回去改一轮。要写一种新风格，照 <a data-repo="template.md" href="template.md">template.md</a> 填四段。</li>
+        <li><span class="zh">在一个空文件夹里打开能写代码、能执行命令的 AI 助手（例如 Claude Code）。本机需要 Node、Chrome 和 ffmpeg，3D 那支还要 Blender。</span><span class="en">Open an AI assistant that can write code and run commands (for example Claude Code) in an empty folder. The machine needs Node, Chrome and ffmpeg; the 3D film also needs Blender.</span></li>
+        <li><span class="zh">复制某种风格的提示词，整段发给它。</span><span class="en">Copy the prompt of a style and send all of it.</span></li>
+        <li><span class="zh">想换成自己的内容：改 <code>Creative seed</code> 里的故事、品牌名、文案和配色，或者改 <code>Output</code> 里的尺寸和时长。<code>Signature features</code> 那段别删，它决定这种风格能不能被一眼认出来。</span><span class="en">To make it your own, change the story, brand name, copy and colours in <code>Creative seed</code>, or the size and length in <code>Output</code>. Keep <code>Signature features</code>: it is what makes the style recognisable at a glance.</span></li>
+        <li><span class="zh">想再提高：成片出来后，另开一个 AI 用 <a data-repo="rubric.md" href="rubric.md">rubric.md</a> 评审，把意见贴回去改一轮。要写一种新风格，照 <a data-repo="template.md" href="template.md">template.md</a> 填四段。</span><span class="en">To push it further, have a second AI review the film with <a data-repo="rubric.md" href="rubric.md">rubric.md</a> and paste the review back for another round. To write a new style, fill in the four sections of <a data-repo="template.md" href="template.md">template.md</a>.</span></li>
       </ol>
     </section>
     <section>
-      <h3>自己跑源码</h3>
-      <pre class="cmd"><span class="c"># 在仓库根目录</span>
+      <h3><span class="zh">自己跑源码</span><span class="en">Run the source yourself</span></h3>
+      <pre class="cmd"><span class="c"><span class="zh"># 在仓库根目录</span><span class="en"># from the repository root</span></span>
 npm install
 pip install -r requirements.txt
-python3 demos/01-flat-vector/audio.py        <span class="c"># 合成配乐 → out/audio.wav</span>
-node harness/render.mjs demos/01-flat-vector <span class="c"># 逐帧渲染 → out/video.mp4</span>
-python3 -m http.server 8000                  <span class="c"># 拖时间轴预览：localhost:8000/harness/preview.html?demo=01-flat-vector</span></pre>
-      <p>每支片是一个网页，按时间画出任意一帧（<code>window.renderAt(t)</code>）；渲染脚本用无头 Chrome 逐帧截图，再用 ffmpeg 合成视频和音轨。
-        3D 那支的画面是 Blender 渲染的，步骤写在 <code>demos/04-3d-render/blender/</code> 各脚本开头。
-        字体文件没有放进仓库，需要的字体列在 <a data-repo="assets/fonts/README.md" href="assets/fonts/README.md">assets/fonts/README.md</a>；缺字体时画面里的字形会和成片不同。</p>
+python3 demos/01-flat-vector/audio.py        <span class="c"><span class="zh"># 合成配乐 → out/audio.wav</span><span class="en"># music and SFX → out/audio.wav</span></span>
+node harness/render.mjs demos/01-flat-vector <span class="c"><span class="zh"># 逐帧渲染 → out/video.mp4</span><span class="en"># render every frame → out/video.mp4</span></span>
+python3 -m http.server 8000                  <span class="c"><span class="zh"># 拖时间轴预览：</span><span class="en"># scrub preview: </span>localhost:8000/harness/preview.html?demo=01-flat-vector</span></pre>
+      <p><span class="zh">每支片是一个网页，按时间画出任意一帧（<code>window.renderAt(t)</code>）；渲染脚本用无头 Chrome 逐帧截图，再用 ffmpeg 合成视频和音轨。
+        3D 那支的画面是 Blender 渲染的，步骤写在 <code>demos/04-3d-render/README.md</code>。
+        字体文件没有放进仓库，需要的字体列在 <a data-repo="assets/fonts/README.md" href="assets/fonts/README.md">assets/fonts/README.md</a>；缺字体时画面里的字形会和成片不同。</span><span class="en">Each film is a web page that draws any
+        frame for a given time (<code>window.renderAt(t)</code>); the renderer captures every frame in headless Chrome and muxes video and
+        audio with ffmpeg. The 3D film's picture is rendered in Blender; the steps are in <code>demos/04-3d-render/README.md</code>.
+        Font files are not in the repository; <a data-repo="assets/fonts/README.md" href="assets/fonts/README.md">assets/fonts/README.md</a>
+        lists the ones needed. Without them the lettering will differ from the films.</span></p>
     </section>
   </div>
 </footer>
