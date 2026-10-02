@@ -1,0 +1,100 @@
+{
+  "fps": 30,
+  "bpm": 150,
+  "beat": 0.4,
+  "key": "D major",
+  "sections": {
+    "pour": 0.0,
+    "rain": 0.4,
+    "fuse": 2.0,
+    "leap": 3.2,
+    "flood": 4.0,
+    "immersed": 4.42,
+    "reveal": 4.85,
+    "gather": 5.75,
+    "gap": 6.2,
+    "drop": 6.4,
+    "glint": 7.1,
+    "drip": 7.6,
+    "ripple": 8.4,
+    "end": 10.0
+  },
+  "pour_snap": 0.167,
+  "landings": [
+    {
+      "id": "P1",
+      "t": 0.4,
+      "x": 640,
+      "size": 1.0,
+      "u": 0.05
+    },
+    {
+      "id": "P2",
+      "t": 0.8,
+      "x": 1250,
+      "size": 0.85,
+      "u": 0.62
+    },
+    {
+      "id": "P3",
+      "t": 1.2,
+      "x": 405,
+      "size": 0.8,
+      "u": 0.95
+    },
+    {
+      "id": "P4",
+      "t": 1.6,
+      "x": 960,
+      "size": 1.35,
+      "u": 0.36
+    }
+  ],
+  "merges": [
+    2.0,
+    2.4,
+    2.8
+  ],
+  "leap": 3.2,
+  "thread_snap": 3.433,
+  "apex": 3.6,
+  "flood_in": 4.035,
+  "flood_full": 4.42,
+  "reveal_start": 4.55,
+  "reveal_end": 5.35,
+  "logo_snap": 6.4,
+  "letter_bridge_snap": 6.417,
+  "glint": 7.2,
+  "drip_snap": 8.567,
+  "drip_land": 8.4,
+  "tagline_start": 8.42,
+  "hop_takeoffs": [
+    1.66,
+    2.06,
+    2.46
+  ],
+  "sheets_in": [
+    4.035,
+    4.105,
+    4.175
+  ],
+  "sheets_out": [
+    4.55,
+    4.62,
+    4.69
+  ],
+  "impact": 4.0,
+  "flood_hits_in": [
+    4.133,
+    4.267,
+    4.333
+  ],
+  "flood_hits_out": [
+    4.867,
+    4.967,
+    5.033
+  ],
+  "_note_flood_hits": "round 1: sheetCross (front/back edge crossing frame centre) from out/cues_derived.json, snapped to frames",
+  "outro": 8.8,
+  "_note_r2": "round 2: hero drip lands one beat earlier (8.40) so the flush-right tagline is complete by ~8.95; necks snap 6.417/6.45/6.483; music outro stays 8.8"
+}

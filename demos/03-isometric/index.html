@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ISOPOLIS — 03-isometric</title>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #DAD3F7; overflow: hidden; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+  #c { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: block; }
+  #ui { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; pointer-events: none; }
+  .tag { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+</style>
+<script type="importmap">{"imports":{
+  "three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/",
+  "opentype":"/node_modules/opentype.js/dist/opentype.mjs"}}</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c" width="1920" height="1080"></canvas>
+  <div id="ui"></div>
+</div>
+<script type="module" src="/demos/03-isometric/js/main.js"></script>
+</body>
+</html>

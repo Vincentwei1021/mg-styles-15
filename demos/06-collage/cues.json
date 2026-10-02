@@ -1,0 +1,80 @@
+{
+ "bpm": 90,
+ "beat": 0.6666667,
+ "step_fps": 12,
+ "hold_fps": 6,
+ "note": "all visual events sit on the 12 fps grid (1/12 s) and on the 90 bpm 16th grid (1/6 s); dead air = 3.667-4.0 (an 8th); r3: chip06 2.417, tear_hand 7.417 (hand lifts off the brad, pinches the rip top at 7.5), end_lid 9.5 (lid snaps shut), end_snip 9.583",
+ "slap_portrait": 0.3333333,
+ "slap_circle": 0.6666667,
+ "slap_news": 1.0,
+ "jaw": [
+  1.3333333,
+  1.6666667,
+  2.0
+ ],
+ "stamp_cut": 2.3333333,
+ "snips": [
+  2.5,
+  2.6666667,
+  2.8333333,
+  3.0,
+  3.1666667
+ ],
+ "rattle": [
+  3.3333333,
+  3.5,
+  3.6666667
+ ],
+ "gap": [
+  3.6666667,
+  4.0
+ ],
+ "pop": 4.0,
+ "burst": [
+  4.0,
+  4.0833333,
+  4.1666667
+ ],
+ "rocket": 4.3333333,
+ "earth": 4.6666667,
+ "birds": [
+  5.0
+ ],
+ "roses": 5.3333333,
+ "butterflies": 5.5,
+ "manicules": 6.0,
+ "band": 6.3333333,
+ "hero": [
+  6.6666667,
+  6.8333333,
+  7.0,
+  7.1666667
+ ],
+ "tear": [
+  7.5,
+  7.6666667,
+  8.1666667
+ ],
+ "end_masthead": 8.3333333,
+ "end_jaw": 8.6666667,
+ "end_button": 9.0,
+ "drop": 4.0,
+ "build": 2.6666667,
+ "outro": 8.0,
+ "manicule_taps": [
+  6.1666667,
+  6.5
+ ],
+ "lid_land": 4.3333333,
+ "end_snip": 9.5833333,
+ "speech": [
+  1.3333333,
+  1.6666667,
+  2.0
+ ],
+ "scraps_clear": 4.75,
+ "shake": 7.6666667,
+ "chip06": 2.4166667,
+ "end_lid": 9.5,
+ "tear_hand": 7.4166667
+}

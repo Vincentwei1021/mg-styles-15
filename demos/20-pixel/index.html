@@ -1,0 +1,18 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block;width:1920px;height:1080px}</style>
+</head><body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+  await document.fonts.load('12px "Fusion Pixel 12"', '神秘宝箱欢迎来到像素世界！像素冒险');
+  await document.fonts.load('8px "Press Start 2P"', 'SCORE PRESS START x0123456789');
+  if (new URLSearchParams(location.search).get('v5') === '1') {   // reel v5 title 「像素风」 + PIXEL ART
+    await document.fonts.load('12px "Fusion Pixel 12"', '像素风');
+    await document.fonts.load('8px "Press Start 2P"', 'PIXEL ART');
+  }
+  await document.fonts.ready;
+  await import('/demos/20-pixel/film.js');
+  window.__ready = true;
+</script>
+</body></html>

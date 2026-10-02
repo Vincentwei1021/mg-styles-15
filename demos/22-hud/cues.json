@@ -1,0 +1,108 @@
+{
+  "fps": 30,
+  "bpm": 120,
+  "anchor": 6.4,
+  "duration": 10.0,
+  "power_on": 0.0,
+  "boot": {
+    "frame": 0.12,
+    "ring_outer": 0.4,
+    "ring_ticks": 0.55,
+    "ring_inner": 0.7,
+    "panel_left": 0.9,
+    "panel_right": 1.15,
+    "hex": 1.2,
+    "globe": 1.4,
+    "log_lines": [
+      0.4,
+      0.9,
+      1.4,
+      1.9
+    ]
+  },
+  "data_live": 2.4,
+  "radar_start": 2.4,
+  "radar_period": 2.0,
+  "radar_theta0_deg": 52,
+  "radar_blips": [
+    {
+      "brg": 118,
+      "r": 0.62
+    },
+    {
+      "brg": 205,
+      "r": 0.41
+    },
+    {
+      "brg": 262,
+      "r": 0.78
+    },
+    {
+      "brg": 331,
+      "r": 0.55
+    }
+  ],
+  "data_rolls": [
+    2.4,
+    2.65,
+    2.9,
+    3.15,
+    3.4,
+    3.65
+  ],
+  "sparkline": 2.9,
+  "signal_detected": 4.4,
+  "globe_turn": [
+    4.4,
+    5.4
+  ],
+  "candidates": [
+    4.9,
+    5.4,
+    5.9
+  ],
+  "brackets_in": 5.9,
+  "snap": 6.2333,
+  "lock": 6.4,
+  "wave_dur": 0.45,
+  "zoom": [
+    6.4,
+    7.7
+  ],
+  "title_en": 6.4,
+  "title_cn": 6.4,
+  "coords": 7.25,
+  "alarm": [
+    6.4,
+    7.4
+  ],
+  "alert_pulses": [
+    6.9,
+    7.4,
+    7.9,
+    8.4
+  ],
+  "outro": 8.4,
+  "end_hold": 8.9,
+  "settle": 6.3333,
+  "ground_track": 3.4,
+  "band_open": 7.1,
+  "resolve": 7.1,
+  "sweep": [
+    2.4,
+    4.6
+  ],
+  "dive": [
+    6.4333,
+    7.1
+  ],
+  "uplink": [
+    9.0,
+    9.4
+  ],
+  "power_off": 9.7667,
+  "bracket_travel": [
+    5.9,
+    6.1667
+  ]
+}

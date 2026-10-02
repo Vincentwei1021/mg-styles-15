@@ -1,0 +1,16 @@
+{
+  "name": "mg-styles-15",
+  "private": true,
+  "description": "15 motion-design films rendered from code: source, prompts, renderer",
+  "scripts": {
+    "render": "node harness/render.mjs"
+  },
+  "dependencies": {
+    "d3": "7.9.0",
+    "opentype.js": "2.0.0",
+    "puppeteer-core": "25.12.0",
+    "simplex-noise": "4.0.3",
+    "three": "0.186.1",
+    "topojson-client": "3.1.0"
+  }
+}

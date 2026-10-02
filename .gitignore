@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+node_modules/
+assets/fonts/**/*.ttf
+assets/fonts/**/*.otf
+demos/*/out/*.wav
+demos/*/out/*.png
+demos/*/out/*.mp4
+demos/*/out/frames/
+demos/*/out/stills/
+*.blend
+*.blend1
+*.npz

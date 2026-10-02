@@ -1,0 +1,270 @@
+{
+ "bpm": 120,
+ "beat": 0.5,
+ "M": 120,
+ "gridY0": 60,
+ "drop": 6.0,
+ "freeze": 8.0,
+ "end": 10.0,
+ "grid": {
+  "land0": 0.125,
+  "step": 0.125,
+  "draw": 0.25,
+  "relax": 0.2,
+  "note": "line pair at distance d from the centre axes lands on the 16th land0+d*step as a 3px black pen stroke, relaxes to the hairline over relax s"
+ },
+ "events": [
+  {
+   "id": "marks",
+   "t": 0.25,
+   "sfx": "tick",
+   "x": 960
+  },
+  {
+   "id": "circle_land",
+   "t": 0.5,
+   "t0": -0.2,
+   "sfx": "thock",
+   "x": 720
+  },
+  {
+   "id": "bar_land",
+   "t": 1.0,
+   "t0": 0.75,
+   "sfx": "clack",
+   "x": 1440
+  },
+  {
+   "id": "target1",
+   "t": 1.25,
+   "until": 1.5,
+   "gx": 840,
+   "gy": 1020,
+   "sfx": "tick"
+  },
+  {
+   "id": "tri_in",
+   "t": 1.5,
+   "sfx": "blip",
+   "x": 1680,
+   "t0": 1.25
+  },
+  {
+   "id": "target2",
+   "t": 1.75,
+   "until": 2.0,
+   "gx": 840,
+   "gy": 540,
+   "sfx": "tick"
+  },
+  {
+   "id": "tri_flip",
+   "t": 2.0,
+   "t0": 1.75,
+   "sfx": "flip",
+   "x": 1200
+  },
+  {
+   "id": "target3",
+   "t": 2.25,
+   "until": 2.5,
+   "gx": 1080,
+   "gy": 300,
+   "sfx": "tick"
+  },
+  {
+   "id": "sq_scale",
+   "t": 2.5,
+   "t0": 2.25,
+   "sfx": "blip2",
+   "x": 600
+  },
+  {
+   "id": "target4",
+   "t": 2.75,
+   "until": 3.0,
+   "gx": 960,
+   "gy": 540,
+   "sfx": "tick"
+  },
+  {
+   "id": "circle_slide",
+   "t": 3.0,
+   "t0": 2.75,
+   "sfx": "contact",
+   "x": 600
+  },
+  {
+   "id": "pivot",
+   "t": 3.0,
+   "sfx": "tick",
+   "x": 960
+  },
+  {
+   "id": "group_turn",
+   "t": 4.0,
+   "t0": 3.25,
+   "sfx": "clunk",
+   "x": 960
+  },
+  {
+   "id": "semi_slide",
+   "t": 4.5,
+   "t0": 4.25,
+   "sfx": "slide",
+   "x": 1560
+  },
+  {
+   "id": "qd_sweep",
+   "t": 5.0,
+   "t0": 4.75,
+   "sfx": "click",
+   "x": 480
+  },
+  {
+   "id": "rule",
+   "t": 5.25,
+   "t0": 5.0,
+   "sfx": "zip",
+   "x": 960
+  },
+  {
+   "id": "ticker_in",
+   "t": 5.25,
+   "sfx": "tick",
+   "x": 480
+  },
+  {
+   "id": "red_in",
+   "t": 5.5,
+   "sfx": "blip",
+   "x": 1680
+  },
+  {
+   "id": "red_split",
+   "t": 5.75,
+   "t0": 5.625,
+   "sfx": "split",
+   "x": 1560,
+   "note": "red 2x2 square's corner is swept to a quarter-disc (pivot 1440,540)"
+  },
+  {
+   "id": "drop",
+   "t": 6.0,
+   "sfx": "impact",
+   "x": 960
+  },
+  {
+   "id": "reveal",
+   "t": 7.0,
+   "until": 7.2,
+   "sfx": "stab",
+   "x": 960,
+   "note": "cards show the giant yellow/red/blue triad, 6-frame hold"
+  },
+  {
+   "id": "freeze",
+   "t": 8.0,
+   "sfx": "stab",
+   "x": 960
+  },
+  {
+   "id": "type_small",
+   "t": 9.0,
+   "sfx": "tick",
+   "x": 1700
+  },
+  {
+   "id": "lock",
+   "t": 9.5,
+   "sfx": "clunk",
+   "x": 960,
+   "note": "press lock: plates snap into register"
+  }
+ ],
+ "ripples": [
+  {
+   "id": "R1",
+   "verb": "rotate",
+   "start": 6.0,
+   "dur": 0.25,
+   "span": 0.25,
+   "size": 120,
+   "angle": 90,
+   "origin": [
+    840,
+    300
+   ],
+   "sfx": "tick"
+  },
+  {
+   "id": "R2",
+   "verb": "flip",
+   "axis": "h",
+   "start": 6.5,
+   "dur": 0.2,
+   "span": 0.3,
+   "size": 240,
+   "origin": [
+    120,
+    60
+   ],
+   "sfx": "flap"
+  },
+  {
+   "id": "R3",
+   "verb": "slide",
+   "start": 7.2,
+   "dur": 0.12,
+   "span": 0.08,
+   "size": 240,
+   "dy": 120,
+   "origin": [
+    1800,
+    540
+   ],
+   "sfx": "slide",
+   "note": "column pairs of 240 px; label strip y 840-960 static; sheared state held 7.40-7.50"
+  },
+  {
+   "id": "R4",
+   "verb": "flip",
+   "axis": "v",
+   "converge": true,
+   "start": 7.5,
+   "dur": 0.2,
+   "span": 0.3,
+   "size": 240,
+   "origin": [
+    960,
+    540
+   ],
+   "sfx": "flap"
+  }
+ ],
+ "letters": {
+  "t0": 8.0,
+  "step": 0.125,
+  "n": 7
+ },
+ "ticker": [
+  8.5,
+  9.0,
+  9.5
+ ],
+ "tickerVisualOnly": [
+  9.8833
+ ],
+ "trim": [
+  120,
+  60,
+  1800,
+  1020
+ ],
+ "frontReset": 7.1,
+ "labels": [
+  7.0,
+  7.0667,
+  7.1333
+ ]
+}

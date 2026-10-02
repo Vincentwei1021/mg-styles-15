@@ -1,0 +1,331 @@
+{
+ "_doc": "Single source of timing. draw = [t, marker] keyframes of the ONE continuous line (marker = piece start, 'piece>' = piece end, 'piece@f' = fraction; a repeated marker = a punctuation hold). Written by tools/retime.py. Visuals read this file; audio.py reads it plus out/timing.json (corner/speed data derived from the same path by tools/dump_timing.mjs). Grid: 72 bpm, 1/8 = 0.4167 s.",
+ "draw": [
+  [
+   0.0,
+   "ground0@0.7"
+  ],
+  [
+   0.2,
+   "seed"
+  ],
+  [
+   0.75,
+   "stem1"
+  ],
+  [
+   0.814,
+   "leaf1"
+  ],
+  [
+   1.116,
+   "stem2"
+  ],
+  [
+   1.214,
+   "leaf2"
+  ],
+  [
+   1.486,
+   "stem3"
+  ],
+  [
+   1.575,
+   "leaf3"
+  ],
+  [
+   1.78,
+   "shoot"
+  ],
+  [
+   1.918,
+   "tendril"
+  ],
+  [
+   2.083,
+   "roof"
+  ],
+  [
+   2.233,
+   "roof"
+  ],
+  [
+   2.533,
+   "pavilion"
+  ],
+  [
+   3.214,
+   "tower"
+  ],
+  [
+   3.5,
+   "tower2"
+  ],
+  [
+   3.65,
+   "tower2"
+  ],
+  [
+   3.85,
+   "sky"
+  ],
+  [
+   4.75,
+   "sky2"
+  ],
+  [
+   4.9,
+   "sky2"
+  ],
+  [
+   5.135,
+   "horizon"
+  ],
+  [
+   5.393,
+   "wave"
+  ],
+  [
+   5.62,
+   "curl"
+  ],
+  [
+   6.12,
+   "lift"
+  ],
+  [
+   6.458,
+   "ring"
+  ],
+  [
+   6.97,
+   "foot"
+  ],
+  [
+   7.019,
+   "arch"
+  ],
+  [
+   7.5,
+   "arch>"
+  ]
+ ],
+ "zoom": [
+  [
+   0.0,
+   5.8
+  ],
+  [
+   0.22,
+   3.49
+  ],
+  [
+   0.4,
+   3.6
+  ],
+  [
+   0.75,
+   3.0
+  ],
+  [
+   0.814,
+   2.9
+  ],
+  [
+   1.116,
+   2.8
+  ],
+  [
+   1.214,
+   2.7
+  ],
+  [
+   1.486,
+   2.6
+  ],
+  [
+   1.575,
+   2.5
+  ],
+  [
+   1.78,
+   2.35
+  ],
+  [
+   1.918,
+   2.25
+  ],
+  [
+   2.083,
+   1.95
+  ],
+  [
+   2.533,
+   1.45
+  ],
+  [
+   3.214,
+   1.38
+  ],
+  [
+   3.5,
+   1.34
+  ],
+  [
+   3.85,
+   1.3
+  ],
+  [
+   4.75,
+   1.26
+  ],
+  [
+   5.135,
+   1.16
+  ],
+  [
+   5.393,
+   1.14
+  ],
+  [
+   5.62,
+   1.16
+  ],
+  [
+   6.12,
+   1.16
+  ],
+  [
+   6.458,
+   1.2
+  ],
+  [
+   6.97,
+   1.3
+  ],
+  [
+   7.019,
+   1.36
+  ],
+  [
+   7.5,
+   1.46
+  ],
+  [
+   7.8,
+   1.45
+  ],
+  [
+   9.0,
+   1.1
+  ],
+  [
+   10,
+   1.1
+  ]
+ ],
+ "holds": [
+  [
+   2.083,
+   2.233,
+   "roof"
+  ],
+  [
+   3.5,
+   3.65,
+   "tower2"
+  ],
+  [
+   4.75,
+   4.9,
+   "sky2"
+  ]
+ ],
+ "camera": {
+  "sigma": 0.3,
+  "lead": 0.08,
+  "logo_from": 6.0,
+  "logo_to": 7.3,
+  "logo_center": [
+   925,
+   392
+  ],
+  "poster_from": 7.8,
+  "poster_to": 9.0,
+  "poster_center": [
+   925,
+   560
+  ]
+ },
+ "sections": {
+  "seed": 0.2,
+  "sapling": 0.75,
+  "branch": 1.78,
+  "beam": 2.083,
+  "building": 2.533,
+  "skyline": 3.85,
+  "horizon": 5.135,
+  "wave": 5.393,
+  "curl": 5.62,
+  "lift": 6.12,
+  "ring": 6.458,
+  "arch": 7.019,
+  "fill": 7.5,
+  "wordmark": 8.333,
+  "rules": 9.25,
+  "hold": 9.0
+ },
+ "morph": [
+  2.063,
+  2.223
+ ],
+ "fill": {
+  "start": 7.5,
+  "swell": 0.367
+ },
+ "pulse": {
+  "start": 7.55,
+  "end": 8.45
+ },
+ "wordmark": {
+  "start": 8.333,
+  "stagger": 0.045,
+  "dur": 0.95,
+  "tagline": 8.75
+ },
+ "rules": [
+  9.25,
+  9.6
+ ],
+ "tip_fade": [
+  7.5,
+  7.82
+ ],
+ "breath": {
+  "start": 8.95,
+  "end": 9.5,
+  "_doc": "forward light seed -> coin in the end hold; arrives as the sheen crosses the coin"
+ },
+ "end_push": {
+  "from": 9.0,
+  "amount": 0.03
+ },
+ "hook": {
+  "lag": 0.067,
+  "lead_px": 0,
+  "brake": 0.2
+ },
+ "anticip": [
+  7.4,
+  7.5
+ ],
+ "overshoot": [
+  7.6,
+  7.8,
+  7.93
+ ],
+ "echo": [
+  7.533,
+  7.933
+ ]
+}

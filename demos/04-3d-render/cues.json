@@ -1,0 +1,60 @@
+{
+ "fps": 24,
+ "bpm": 120,
+ "duration": 10.0,
+ "_r1": "round-1 retime: s lands in macro at 0.5 (hook) and fires the ping; o/f/t on beats 1.5/2.0/2.5; ball hang-then-slam 5.30-5.975",
+ "camA": [
+  0.54,
+  1.9
+ ],
+ "sweep1": [
+  -0.2,
+  1.0
+ ],
+ "ping": 0.5,
+ "drops": {
+  "s": 0.5,
+  "o": 1.5,
+  "f": 2.0,
+  "t": 2.5
+ },
+ "hop_air": 0.26,
+ "build": 3.0,
+ "counter_sweep": 3.56,
+ "camB": [
+  3.9,
+  5.75
+ ],
+ "tremble": [
+  5.0,
+  5.98
+ ],
+ "ball_enter": 5.3,
+ "hang": [
+  5.8,
+  5.93
+ ],
+ "ball_contact": 5.975,
+ "hero": 6.0,
+ "shock_speed": 5.0,
+ "camC": [
+  6.25,
+  9.2
+ ],
+ "tagline": 8.0,
+ "outro": 8.0,
+ "end_hold": [
+  8.6,
+  10.0
+ ],
+ "_derived": "exact contact / rebound / hop / capsule-landing times are written by blender/sim.py to out/events.json (audio.py reads both)",
+ "lifts": [
+  3.375,
+  3.75
+ ],
+ "crown_hang": [
+  6.42,
+  6.76
+ ],
+ "_r2": "round-2: letters re-lift in reading order on the 16ths (3.375-3.75, counter-sweep +X); camA eased in from 0.54; capsule field on its own clock: 0.35x hold 6.48-6.70 on the crown apex (ramps 6.42/6.76), catch-up <=1.35x back on the timeline by 7.8 (see sim.py R(t))"
+}

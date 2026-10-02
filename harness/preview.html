@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>预览</title>
+<link rel="icon" href="data:,">
+<!-- Scrub / play a film page in the browser: serve the repo root (python3 -m http.server 8000), then open
+     http://localhost:8000/harness/preview.html?demo=01-flat-vector
+     The page draws a frame only when renderAt(t) is called; this drives it from a timeline. Playback runs as fast as the
+     page can draw (heavy WebGL films drop frames here; the renderer captures every frame). Sound: out/audio.wav if it exists. -->
+<style>
+  html, body { margin: 0; height: 100%; background: #0a0a0d; color: #ddd; font: 13px -apple-system, "PingFang SC", sans-serif; }
+  body { display: flex; flex-direction: column; }
+  #stage { flex: 1; position: relative; overflow: hidden; }
+  #f { position: absolute; border: 0; transform-origin: 0 0; background: #000; }
+  .ctl { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid #222; }
+  .ctl input[type=range] { flex: 1; }
+  .ctl button, .ctl select { background: #1a1a20; color: #ddd; border: 1px solid #333; border-radius: 6px; padding: 5px 10px; font: inherit; }
+  #lbl { font: 12px "SF Mono", Menlo, monospace; min-width: 120px; text-align: right; }
+  #msg { position: absolute; inset: 0; display: grid; place-items: center; color: #888; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage"><iframe id="f"></iframe><div id="msg">加载中…</div></div>
+<div class="ctl">
+  <select id="demo"></select>
+  <button id="play">播放</button>
+  <input id="t" type="range" min="0" max="10" step="0.001" value="0">
+  <span id="lbl">0.000 s</span>
+</div>
+<audio id="snd" preload="auto"></audio>
+<script>
+const DEMOS = ['05-cel-boil', '03-isometric', '01-flat-vector', '02-line-art', '04-3d-render', '08-morph', '19-paperclip', '22-hud',
+  '06-collage', '12-aurora-glass', '09-bauhaus', '10-synthwave', '20-pixel', '07-liquid', '18-hanazi'];
+const q = new URLSearchParams(location.search);
+const demo = q.get('demo') || DEMOS[0];
+const $ = (id) => document.getElementById(id);
+const f = $('f'), t = $('t'), lbl = $('lbl'), btn = $('play'), snd = $('snd');
+$('demo').innerHTML = DEMOS.map((d) => `<option ${d === demo ? 'selected' : ''}>${d}</option>`).join('');
+$('demo').onchange = (e) => { location.search = '?demo=' + e.target.value; };
+let D = { width: 1920, height: 1080, fps: 30, duration: 10 }, busy = false, want = null, playing = false, t0 = 0;
+
+function fit() {
+  const s = $('stage'), k = Math.min(s.clientWidth / D.width, s.clientHeight / D.height);
+  f.style.width = D.width + 'px'; f.style.height = D.height + 'px';
+  f.style.transform = `translate(${(s.clientWidth - D.width * k) / 2}px, ${(s.clientHeight - D.height * k) / 2}px) scale(${k})`;
+}
+async function seek(x) {                       // latest request wins; frames are quantised like the renderer's
+  want = Math.floor(x * D.fps + 1e-6) / D.fps;
+  if (busy) return;
+  busy = true;
+  while (want != null) {
+    const s = want; want = null;
+    const w = f.contentWindow;
+    for (const a of w.document.getAnimations()) { try { a.pause(); a.currentTime = s * 1000; } catch (e) {} }
+    try { await w.renderAt(s); } catch (e) { console.error(e); }
+    lbl.textContent = `${s.toFixed(3)} s · f${Math.round(s * D.fps)}`;
+  }
+  busy = false;
+}
+function loop() {
+  if (!playing) return;
+  let x = (performance.now() - t0) / 1000;
+  if (x >= D.duration) { x = 0; t0 = performance.now(); if (!snd.paused) snd.currentTime = 0; }
+  t.value = x; seek(x);
+  requestAnimationFrame(loop);
+}
+btn.onclick = () => {
+  playing = !playing; btn.textContent = playing ? '暂停' : '播放';
+  if (playing) { t0 = performance.now() - (+t.value) * 1000; if (snd.src) { snd.currentTime = +t.value; snd.play().catch(() => {}); } loop(); }
+  else snd.pause();
+};
+t.oninput = () => { if (playing) btn.onclick(); seek(+t.value); };
+f.onload = async () => {
+  const w = f.contentWindow;
+  while (w.__ready !== true) await new Promise((r) => setTimeout(r, 100));
+  D = Object.assign(D, w.DEMO || {});
+  t.max = D.duration - 1 / D.fps;
+  fit(); $('msg').remove();
+  fetch(`/demos/${demo}/out/audio.wav`, { method: 'HEAD' }).then((r) => { if (r.ok) snd.src = `/demos/${demo}/out/audio.wav`; }).catch(() => {});
+  t.value = +q.get('t') || 0;
+  seek(+t.value);
+};
+addEventListener('resize', fit);
+f.src = `/demos/${demo}/index.html`;
+</script>
+</body>
+</html>

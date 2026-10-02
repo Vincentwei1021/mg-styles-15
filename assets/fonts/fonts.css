@@ -1,0 +1,312 @@
+/* Font faces the 15 films load (pages served from the repo root). The font files are not in the repo:
+   put each file at the path in its url(); assets/fonts/README.md lists them. */
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: url('/assets/fonts/cjk/alibabapuhuiti3/AlibabaPuHuiTi-3-105-Heavy.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: url('/assets/fonts/cjk/alibabapuhuiti3/AlibabaPuHuiTi-3-115-Black.ttf') format('truetype');
+  font-weight: 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: url('/assets/fonts/cjk/alibabapuhuiti3/AlibabaPuHuiTi-3-55-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: url('/assets/fonts/cjk/alibabapuhuiti3/AlibabaPuHuiTi-3-65-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alibaba PuHuiTi';
+  src: url('/assets/fonts/cjk/alibabapuhuiti3/AlibabaPuHuiTi-3-85-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Alimama ShuHeiTi';
+  src: url('/assets/fonts/cjk/alimamashuheiti/AlimamaShuHeiTi-Bold.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Douyin Sans';
+  src: url('/assets/fonts/cjk/douyinsans/DouyinSansBold.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Fusion Pixel 12';
+  src: url('/assets/fonts/cjk/fusionpixel/fusion-pixel-12px-proportional-zh_hans.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/assets/fonts/cjk/harmonyossanssc/HarmonyOS_Sans_SC_Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/assets/fonts/cjk/harmonyossanssc/HarmonyOS_Sans_SC_Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/assets/fonts/cjk/harmonyossanssc/HarmonyOS_Sans_SC_Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/assets/fonts/cjk/harmonyossanssc/HarmonyOS_Sans_SC_Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'HarmonyOS Sans SC';
+  src: url('/assets/fonts/cjk/harmonyossanssc/HarmonyOS_Sans_SC_Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Long Cang';
+  src: url('/assets/fonts/cjk/longcang/LongCang-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'LXGW Marker Gothic';
+  src: url('/assets/fonts/cjk/lxgwmarkergothic/LXGWMarkerGothic-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Noto Sans SC';
+  src: url('/assets/fonts/cjk/notosanssc/NotoSansSC-VF.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Noto Serif SC';
+  src: url('/assets/fonts/cjk/notoserifsc/NotoSerifSC-VF.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Resource Han Rounded';
+  src: url('/assets/fonts/cjk/resourcehanrounded/ResourceHanRoundedCN-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Resource Han Rounded';
+  src: url('/assets/fonts/cjk/resourcehanrounded/ResourceHanRoundedCN-Heavy.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'ZCOOL KuaiLe';
+  src: url('/assets/fonts/cjk/zcoolkuaile/ZCOOLKuaiLe-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Anton';
+  src: url('/assets/fonts/latin/anton/Anton-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Archivo';
+  src: url('/assets/fonts/latin/archivo/Archivo-Italic-VF.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-stretch: 62% 125%;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/assets/fonts/latin/bebasneue/BebasNeue-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Caveat';
+  src: url('/assets/fonts/latin/caveat/Caveat-VF.ttf') format('truetype');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Chakra Petch';
+  src: url('/assets/fonts/latin/chakrapetch/ChakraPetch-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Cormorant Garamond';
+  src: url('/assets/fonts/latin/cormorantgaramond/CormorantGaramond-VF.ttf') format('truetype');
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'DM Sans';
+  src: url('/assets/fonts/latin/dmsans/DMSans-VF.ttf') format('truetype');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Fredoka';
+  src: url('/assets/fonts/latin/fredoka/Fredoka-VF.ttf') format('truetype');
+  font-weight: 300 700;
+  font-style: normal;
+  font-stretch: 75% 125%;
+  font-display: block;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/assets/fonts/latin/ibmplexmono/IBMPlexMono-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/assets/fonts/latin/ibmplexmono/IBMPlexMono-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/assets/fonts/latin/instrumentserif/InstrumentSerif-Italic.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  src: url('/assets/fonts/latin/instrumentserif/InstrumentSerif-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/assets/fonts/latin/inter/Inter-VF.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/assets/fonts/latin/jetbrainsmono/JetBrainsMono-VF.ttf') format('truetype');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Luckiest Guy';
+  src: url('/assets/fonts/latin/luckiestguy/LuckiestGuy-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Michroma';
+  src: url('/assets/fonts/latin/michroma/Michroma-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('/assets/fonts/latin/poppins/Poppins-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('/assets/fonts/latin/poppins/Poppins-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Press Start 2P';
+  src: url('/assets/fonts/latin/pressstart2p/PressStart2P-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('/assets/fonts/latin/rajdhani/Rajdhani-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Rajdhani';
+  src: url('/assets/fonts/latin/rajdhani/Rajdhani-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Sora';
+  src: url('/assets/fonts/latin/sora/Sora-VF.ttf') format('truetype');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Unbounded';
+  src: url('/assets/fonts/latin/unbounded/Unbounded-VF.ttf') format('truetype');
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'VT323';
+  src: url('/assets/fonts/latin/vt323/VT323-Regular.ttf') format('truetype');
+  font-weight: 1 1000;
+  font-style: normal;
+  font-display: block;
+}

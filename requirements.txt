@@ -1,0 +1,15 @@
+# 配乐：demos/*/audio.py 和 lib/audio（以下是验证过能跑通的版本）
+numpy==2.4.6
+scipy==1.16.3
+soundfile==0.14.0
+numba==0.66.0
+pedalboard==0.9.25
+pyloudnorm==0.2.0
+matplotlib==3.9.1
+librosa==0.11.0
+# 生成素材的脚本：tools/、assets/prep*.py、work/prep*.py、blender/make_letters.py
+pillow==12.3.0
+fonttools==4.53.1
+scikit-image==0.26.0
+opencv-python==5.0.0.93
+rembg==2.0.78

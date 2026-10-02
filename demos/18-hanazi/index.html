@@ -1,0 +1,541 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+html,body{margin:0;background:#000;overflow:hidden}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;background:#1b1b22}
+.shot{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;transform-origin:540px 960px}
+.shot img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none}
+.ear{visibility:hidden}
+#cardwrap{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:0 0}
+#cardborder{position:absolute;background:#fff;border-radius:36px}
+#vig{position:absolute;left:0;top:0;width:1080px;height:1920px;pointer-events:none;
+  background:radial-gradient(ellipse 80% 62% at 50% 46%, rgba(0,0,0,0) 58%, rgba(28,8,30,.42) 100%)}
+#flash{position:absolute;left:0;top:0;width:1080px;height:1920px;background:#fff;opacity:0}
+#grain{position:absolute;left:0;top:0;width:1080px;height:1920px;background:url(/assets/textures/grain/grain_fine_2048.png);
+  mix-blend-mode:overlay;opacity:.09;pointer-events:none}
+svg{position:absolute;left:0;top:0;overflow:visible}
+#sun{position:absolute;left:0;top:0;width:1080px;height:1920px;mix-blend-mode:screen;background:radial-gradient(circle at 92% 6%, rgba(255,236,170,.85) 0, rgba(255,196,110,.35) 22%, rgba(255,170,90,0) 55%)}
+#cutw{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-origin:540px 1420px}
+</style></head>
+<body>
+<div id="stage">
+  <svg id="bg" width="1080" height="1920" viewBox="0 0 1080 1920"></svg>
+  <div id="s1" class="shot"><img id="i1" src="/demos/18-hanazi/assets/white_dof.jpg"><img id="e6" class="ear" src="/demos/18-hanazi/assets/white_ear6.png"><img id="e11" class="ear" src="/demos/18-hanazi/assets/white_ear11.png"><img id="e16" class="ear" src="/demos/18-hanazi/assets/white_ear16.png"><div id="sun"></div></div>
+  <div id="s2" class="shot"><img id="i2" src="/demos/18-hanazi/assets/grey_r2.jpg"></div>
+  <div id="cardwrap">
+    <div id="cardborder"></div>
+    <div id="s3" class="shot">
+      <img id="i3" src="/demos/18-hanazi/assets/tux_r1.jpg"><canvas id="zb" width="1080" height="1920" style="position:absolute;left:0;top:0;filter:saturate(1.2) contrast(1.06)"></canvas>
+      <svg id="rays" width="1080" height="1920" viewBox="0 0 1080 1920"></svg>
+      <div id="cutw"><img id="hL06" src="/demos/18-hanazi/assets/hero_L06.png"><img id="hL12" src="/demos/18-hanazi/assets/hero_L12.png"><img id="hB0" src="/demos/18-hanazi/assets/hero_B0.png"><img id="hB1" src="/demos/18-hanazi/assets/hero_B1.png"><img id="hB2" src="/demos/18-hanazi/assets/hero_B2.png"><img id="hL135" src="/demos/18-hanazi/assets/hero_L135.png"></div>
+    </div>
+  </div>
+  <div id="vig"></div>
+  <svg id="fx" width="1080" height="1920" viewBox="0 0 1080 1920"></svg>
+  <div id="flash"></div>
+  <div id="grain"></div>
+</div>
+<script>
+window.DEMO = { width: 1080, height: 1920, fps: 30, duration: 10, motionBlur: { samples: 1, shutter: 0.5 } };
+const NS = 'http://www.w3.org/2000/svg', FR = 1 / 30;
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x;
+const lerp = (a, b, u) => a + (b - a) * u;
+const E = {
+  outCubic: u => 1 - Math.pow(1 - u, 3), inCubic: u => u * u * u, outQuart: u => 1 - Math.pow(1 - u, 4),
+  inOutCubic: u => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2, inOutSine: u => -(Math.cos(Math.PI * u) - 1) / 2,
+  inSine: u => 1 - Math.cos(u * Math.PI / 2), outExpo: u => u >= 1 ? 1 : 1 - Math.pow(2, -10 * u), outBack: u => 1 + 2.70158 * Math.pow(u - 1, 3) + 1.70158 * Math.pow(u - 1, 2), inQuad: u => u * u, outQuad: u => 1 - (1 - u) * (1 - u),
+};
+// damped spring step: zeta .517 / omega 22 -> peak 1.15 at frame 5, ~1.01 at frame 8
+function spring(t, z = 0.517, w = 22) {
+  if (t <= 0) return 0; const wd = w * Math.sqrt(1 - z * z);
+  return 1 - Math.exp(-z * w * t) * (Math.cos(wd * t) + z * w / wd * Math.sin(wd * t));
+}
+function h1(i) { let x = Math.imul((i | 0) ^ 0x9e3779b9, 0x85ebca6b); x ^= x >>> 13; x = Math.imul(x, 0xc2b2ae35); x ^= x >>> 16; return (x >>> 0) / 4294967296; }
+function rnd(seed) { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function vn(x, seed) { const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f); return lerp(h1(i * 7919 + seed * 104729), h1((i + 1) * 7919 + seed * 104729), u) * 2 - 1; }
+function hand(t, seed, a = 1) { return { x: a * (7 * vn(t * .9, seed) + 2.5 * vn(t * 2.3, seed + 11)), y: a * (6 * vn(t * .8, seed + 23) + 2 * vn(t * 2.6, seed + 37)), r: a * .32 * vn(t * .7, seed + 51) }; }
+function kick(t, t0, A, k = 8, f = 12) {
+  const u = t - t0; if (u < 0 || u > 1.5) return { x: 0, y: 0, r: 0 }; const e = A * Math.exp(-k * u);
+  return { x: e * Math.sin(2 * Math.PI * f * u), y: e * .8 * Math.cos(2 * Math.PI * f * .83 * u + .7), r: e * .03 * Math.sin(2 * Math.PI * f * .6 * u) };
+}
+const addK = (...ks) => ks.reduce((a, k) => ({ x: a.x + k.x, y: a.y + k.y, r: a.r + k.r }), { x: 0, y: 0, r: 0 });
+function el(tag, attrs = {}, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+let gid = 0, DEFS;
+function grad(stops, vertical = true) {
+  const id = 'g' + (gid++); const g = el('linearGradient', vertical ? { id, x1: 0, y1: 0, x2: 0, y2: 1 } : { id, x1: 0, y1: 0, x2: 1, y2: 0 }, DEFS);
+  stops.forEach(([o, c, a]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a ?? 1 }, g)); return `url(#${id})`;
+}
+const show = (e, v) => e.setAttribute('visibility', v ? 'visible' : 'hidden');
+const disp = (e, v) => { e.style.display = v ? '' : 'none'; };   // hard-hides a whole group (children can't override)
+const X = (e, x, y, r = 0, s = 1, sy) => e.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${r.toFixed(3)}) scale(${s.toFixed(4)} ${(sy ?? s).toFixed(4)})`);
+
+/* ---------- 花字 component: extrude x2 -> outer colour stroke -> white stroke -> gradient fill -> gloss ---------- */
+function HZ(parent, sp) {
+  const root = el('g', {}, parent);
+  if (sp.soft !== false) root.setAttribute('filter', sp.filter || 'url(#soft)');
+  const fillPaint = sp.fillStops ? grad(sp.fillStops) : sp.fill;
+  const gloss = sp.gloss ? grad([[0, '#fff', sp.gloss], [0.46, '#fff', 0], [1, '#fff', 0]]) : null;
+  const items = sp.chars.map(c => {
+    const g = el('g', {}, parent === root ? root : root);
+    const inner = el('g', sp.skew ? { transform: `skewX(${sp.skew})` } : {}, g);
+    const fs = c.size || sp.size, sc = fs / sp.size;
+    const base = { 'font-family': sp.font, 'font-size': fs, 'font-weight': sp.weight || 400, 'text-anchor': sp.anchor || 'middle', 'dominant-baseline': 'central', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+    const dy = (sp.dy || 0) * sc, W = 2 * ((sp.white || 0) + (sp.outer || 0)) * sc;
+    const mk = a => { const e = el('text', { ...base, ...a }, inner); e.textContent = c.ch; return e; };
+    if (sp.ext) { const ec = sp.extColor; mk({ y: dy + sp.ext * sc, x: (sp.extX || 0) * sc, fill: ec, stroke: ec, 'stroke-width': W }); mk({ y: dy + sp.ext * .5 * sc, x: (sp.extX || 0) * .5 * sc, fill: ec, stroke: ec, 'stroke-width': W }); }
+    if (sp.outer) mk({ y: dy, fill: sp.outerColor, stroke: sp.outerColor, 'stroke-width': W });
+    if (sp.white) mk({ y: dy, fill: sp.whiteColor || '#fff', stroke: sp.whiteColor || '#fff', 'stroke-width': 2 * sp.white * sc });
+    const f = mk({ y: dy, fill: c.fillStops ? grad(c.fillStops) : fillPaint });
+    if (gloss) mk({ y: dy, fill: gloss });
+    return { g, inner, x: c.x, y: c.y, rot: c.rot || 0, fillEl: f, t0: c.t0, drop: c.drop, r0: c.r0, ph: c.ph ?? (c.x * .013), bob: c.bob };
+  });
+  return { root, items };
+}
+// per-char pop: spring scale 0 -> 1.15 -> 1, drop-in, rotate-in, hold wiggle, optional pop-out at t1
+function charXf(t, c, o = {}) {
+  const u = t - c.t0; if (u < 0) return null;
+  let s = spring(u, o.z ?? .517, o.w ?? 22);
+  let y = -(c.drop ?? o.drop ?? 0) * (1 - spring(u, .55, 20));
+  let r = (c.r0 ?? o.r0 ?? 0) * (1 - spring(u, .45, 18));
+  const hold = clamp((u - .22) / .35), wf = o.wf ?? 1.15;
+  r += hold * (o.wig ?? 1.8) * Math.sin(2 * Math.PI * wf * t + c.ph);
+  y += hold * (c.bob ?? o.bob ?? 3) * Math.sin(2 * Math.PI * wf * t + c.ph + 1.9);
+  s *= 1 + hold * (o.breath ?? .012) * Math.sin(2 * Math.PI * wf * 2 * t + c.ph * 1.7);
+  if (o.t1 != null && t >= o.t1) { const k = clamp((t - o.t1) / .17); if (k >= 1) return null; s *= k < .3 ? 1 + .12 * E.outQuad(k / .3) : 1.12 * (1 - E.inCubic((k - .3) / .7)); }
+  return { s, y, r };
+}
+function popOut(t, t1) { if (t < t1) return 1; const k = (t - t1) / .17; return k >= 1 ? 0 : k < .3 ? 1 + .12 * E.outQuad(k / .3) : 1.12 * (1 - E.inCubic((k - .3) / .7)); }
+function driveHZ(t, hz, o = {}, off = { x: 0, y: 0 }) {
+  for (const c of hz.items) {
+    const f = charXf(t, c, o); if (!f || (o.until != null && t >= o.until) || (o.from != null && t < o.from)) { show(c.g, false); continue; }
+    show(c.g, true); X(c.g, c.x + off.x, c.y + f.y + off.y, c.rot + f.r, f.s);
+  }
+}
+/* ---------- decorations ---------- */
+function sparkleD(r) { const k = r * .16; return `M0 ${-r}Q${k} ${-k} ${r} 0Q${k} ${k} 0 ${r}Q${-k} ${k} ${-r} 0Q${-k} ${-k} 0 ${-r}Z`; }
+function burstD(cx, cy, rx, ry, n, seed, spike = .3) {
+  const R = rnd(seed); let d = '';
+  for (let i = 0; i < 2 * n; i++) {
+    const a = i / (2 * n) * Math.PI * 2 + (R() - .5) * .09, out = i % 2 === 0;
+    const k = out ? 1 + (R() - .45) * .26 : (1 - spike) + (R() - .5) * .07;
+    d += (i ? 'L' : 'M') + (cx + Math.cos(a) * rx * k).toFixed(1) + ' ' + (cy + Math.sin(a) * ry * k).toFixed(1);
+  }
+  return d + 'Z';
+}
+function focusD(cx, cy, seed, n = 120) {
+  const R = rnd(seed); let d = '';
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2 + (R() - .5) * (Math.PI * 2 / n) * .9, w = .0035 + R() * .011, ri = 470 + R() * 260, ro = 1600;
+    const p = (ang, rr) => (cx + Math.cos(ang) * rr).toFixed(1) + ' ' + (cy + Math.sin(ang) * rr * 1.18).toFixed(1);
+    d += `M${p(a, ri)}L${p(a - w, ro)}L${p(a + w, ro)}Z`;
+  }
+  return d;
+}
+function raysD(n, R) { let d = ''; for (let i = 0; i < n; i++) { const a0 = i / n * Math.PI * 2, a1 = a0 + Math.PI / n; d += `M0 0L${(Math.cos(a0) * R).toFixed(1)} ${(Math.sin(a0) * R).toFixed(1)}L${(Math.cos(a1) * R).toFixed(1)} ${(Math.sin(a1) * R).toFixed(1)}Z`; } return d; }
+const DROP_D = 'M0 -64C9 -42 36 -12 36 14A36 36 0 0 1 -36 14C-36 -12 -9 -42 0 -64Z';
+const PAW_D = 'M0 10c-20 0-34 14-34 28 0 12 12 16 34 16s34-4 34-16c0-14-14-28-34-28zM-30-4a11 14 0 1 0 .1 0zM30-4a11 14 0 1 0 .1 0zM-12-24a10 13 0 1 0 .1 0zM12-24a10 13 0 1 0 .1 0z';
+
+/* ---------- photo plates ---------- */
+const PL = {
+  i1: { iw: 1536, ih: 2048, fx: .775, fy: .44 },
+  i2: { iw: 3300, ih: 2200, fx: .565, fy: .6 },
+  i3: { iw: 2400, ih: 2400, fx: .585, fy: .40 },
+  hero: { iw: 1800, ih: 1800 },
+};
+function geom(P, Z, sx, sy, sh, fx = P.fx, fy = P.fy, free = false) {
+  const S = Math.max(1080 / P.iw, 1920 / P.ih) * 1.05 * Z, W = P.iw * S, H = P.ih * S, m = 14;
+  let x = sx - fx * W, y = sy - fy * H;
+  if (!free) { x = clamp(x, 1080 - W + m, -m); y = clamp(y, 1920 - H + m, -m); }
+  return { x: x + sh.x, y: y + sh.y, S };
+}
+function place(img, P, Z, sx, sy, sh, fx = P.fx, fy = P.fy, free = false) {
+  const g = geom(P, Z, sx, sy, sh, fx, fy, free);
+  img.style.width = P.iw + 'px'; img.style.height = P.ih + 'px';
+  img.style.transform = `translate(${g.x.toFixed(2)}px,${g.y.toFixed(2)}px) scale(${g.S.toFixed(5)})`;
+}
+const HERO = ['hL06', 'hL12', 'hB0', 'hB1', 'hB2', 'hL135'];
+/* shot-3 plate (pre-drop): creep, 三连推 triple snap push onto the eyes (2-frame outExpo + 1-frame 3 % overshoot), tension creep + ramping shake */
+function plate3(tt) {
+  let h = hand(tt, 3, 1), Z = lerp(1.0, 1.08, E.inSine(clamp((tt - C.wipe) / 1.25))), fe = 0;
+  C.push.forEach((p, k) => { if (tt >= p) { const u = tt - p, e = E.outExpo(clamp(u / (2 * FR)));
+    const last = k === C.push.length - 1, creep = last ? 1 + .16 * u : 1 + .03 * u, os = 1 + .03 * Math.exp(-Math.pow((u - 1.6 * FR) / (.9 * FR), 2));
+    Z = lerp(k ? C.pushZ[k - 1] : Z, C.pushZ[k], e) * creep * os; fe = lerp(k / 3, (k + 1) / 3, e); h = addK(h, kick(tt, p, 9 + 4 * k, 14, 13)); } });
+  const p3 = C.push[C.push.length - 1];
+  if (tt >= p3 + 2 * FR) { const a = lerp(2, 8, clamp((tt - p3 - 2 * FR) / (C.drop - p3 - 2 * FR))), q = Math.floor(tt * 30);
+    h = addK(h, { x: (h1(q * 3 + 1) - .5) * 2 * a, y: (h1(q * 3 + 2) - .5) * 2 * a, r: (h1(q * 3 + 3) - .5) * .5 * a / 8 }); }
+  const zi = 1 + .09 * (1 - E.outCubic(clamp((tt - C.wipe) / .5)));
+  return { g: geom(PL.i3, Z * zi, 540, lerp(760, 800, fe), h, lerp(PL.i3.fx, .578, fe), lerp(PL.i3.fy, .371, fe)), h };
+}
+
+let C, fx, rays, bgPat, B = {};
+async function build() {
+  C = await (await fetch('/demos/18-hanazi/cues.json')).json();
+  for (const [f, w] of [['Resource Han Rounded', 900], ['Alimama ShuHeiTi', 700], ['Douyin Sans', 700], ['LXGW Marker Gothic', 400], ['ZCOOL KuaiLe', 400], ['Luckiest Guy', 400]])
+    await document.fonts.load(`${w} 100px "${f}"`, '今日份快乐？空气突然安静震惊！前方高能这发量合理吗绝子下期见～猫主认证喵呜日记小声正在光作用…（）发量检测爆表正常MIAOWU EP.07★');
+  await document.fonts.ready;
+  const mctx = document.createElement('canvas').getContext('2d');
+  fx = $('fx');
+  DEFS = el('defs', {}, fx);
+  const f1 = el('filter', { id: 'soft', x: '-30%', y: '-30%', width: '160%', height: '175%' }, DEFS);
+  el('feDropShadow', { dx: 0, dy: 12, stdDeviation: 11, 'flood-color': '#1a0a28', 'flood-opacity': .36 }, f1);
+  const f1b = el('filter', { id: 'soft2', x: '-40%', y: '-30%', width: '180%', height: '175%' }, DEFS);
+  el('feDropShadow', { dx: 0, dy: 14, stdDeviation: 14, 'flood-color': '#0B1030', 'flood-opacity': .4 }, f1b);
+  const f2 = el('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' }, DEFS);
+  el('feDropShadow', { dx: 0, dy: 0, stdDeviation: 7, 'flood-color': '#FFE14D', 'flood-opacity': .9 }, f2);
+  // stamp grunge: rough edge + speckle knock-outs
+  const f3 = el('filter', { id: 'rough', x: '-10%', y: '-10%', width: '120%', height: '120%' }, DEFS);
+  el('feTurbulence', { type: 'fractalNoise', baseFrequency: .045, numOctaves: 2, seed: 4, result: 'n' }, f3);
+  el('feDisplacementMap', { in: 'SourceGraphic', in2: 'n', scale: 7, xChannelSelector: 'R', yChannelSelector: 'G', result: 'd' }, f3);
+  el('feTurbulence', { type: 'fractalNoise', baseFrequency: .11, numOctaves: 3, seed: 9, result: 'sp' }, f3);
+  el('feColorMatrix', { in: 'sp', type: 'matrix', values: '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  -18 0 0 0 12.6', result: 'spa' }, f3);
+  el('feComposite', { in: 'd', in2: 'spa', operator: 'in' }, f3);
+
+  /* end board: cyan stripes */
+  const bg = $('bg'); const bdefs = el('defs', {}, bg);
+  bgPat = el('pattern', { id: 'stripes', width: 92, height: 92, patternUnits: 'userSpaceOnUse' }, bdefs);
+  el('rect', { width: 92, height: 92, fill: '#2CCBF2' }, bgPat); el('rect', { width: 46, height: 92, fill: '#56D8F6' }, bgPat);
+  const rg = el('radialGradient', { id: 'bgglow', cx: .5, cy: .42, r: .6 }, bdefs);
+  el('stop', { offset: 0, 'stop-color': '#fff', 'stop-opacity': .55 }, rg); el('stop', { offset: 1, 'stop-color': '#fff', 'stop-opacity': 0 }, rg);
+  el('rect', { width: 1080, height: 1920, fill: 'url(#stripes)' }, bg);
+  el('rect', { width: 1080, height: 1920, fill: 'url(#bgglow)' }, bg);
+  // dotted confetti on the board
+  const Rb = rnd(77);
+  for (let i = 0; i < 26; i++) el('circle', { cx: Rb() * 1080, cy: Rb() * 1920, r: 5 + Rb() * 9, fill: ['#FFE14D', '#FF7FC8', '#fff'][i % 3], opacity: .85 }, bg);
+
+  /* hero rays behind the cut-out cat */
+  rays = $('rays'); const rdefs = el('defs', {}, rays);
+  const rg2 = el('radialGradient', { id: 'raycore' }, rdefs);
+  el('stop', { offset: 0, 'stop-color': '#fff', 'stop-opacity': .95 }, rg2); el('stop', { offset: .55, 'stop-color': '#FFF6C0', 'stop-opacity': .35 }, rg2); el('stop', { offset: 1, 'stop-color': '#FFF6C0', 'stop-opacity': 0 }, rg2);
+  el('rect', { width: 1080, height: 1920, fill: '#FFD23F' }, rays);
+  B.raysG = el('g', {}, rays); el('path', { d: raysD(20, 2400), fill: '#FF6FA5' }, B.raysG);
+  el('circle', { cx: 540, cy: 760, r: 760, fill: 'url(#raycore)' }, rays);
+
+  /* ---- candy wipe bands (shot 2 -> 3) ---- */
+  B.wipe = el('g', {}, fx);
+  B.wpat = [];
+  { const pt = el('pattern', { id: 'wp0', width: 128, height: 128, patternUnits: 'userSpaceOnUse' }, DEFS); B.wpat.push(pt);
+    el('rect', { width: 128, height: 128, fill: '#2CCBF2' }, pt); el('rect', { width: 58, height: 128, fill: '#FFFFFF' }, pt);
+    B.wband = el('g', {}, B.wipe); const BW = 1900, bar = 90, dv = 8;
+    el('rect', { x: -BW / 2, y: -1700, width: BW, height: 3400, fill: 'url(#wp0)' }, B.wband);
+    for (const sg of [-1, 1]) { let x = BW / 2;   // body outward: navy | cyan | navy | lemon | navy | pink | navy edge (all opaque)
+      for (const c of ['#2CCBF2', '#FFE14D', '#FF3D7F']) { el('rect', { x: sg > 0 ? x : -x - dv, y: -1700, width: dv, height: 3400, fill: '#1E2A78' }, B.wband); x += dv;
+        el('rect', { x: sg > 0 ? x : -x - bar, y: -1700, width: bar, height: 3400, fill: c }, B.wband); x += bar; }
+      el('rect', { x: sg > 0 ? x : -x - 14, y: -1700, width: 14, height: 3400, fill: '#1E2A78' }, B.wband); } }
+
+  /* ---- focus lines + burst (hero) ---- */
+  B.focus = el('path', { fill: '#fff', opacity: .92 }, fx);
+  B.puff = [[330, 262, -118, 1], [800, 300, -62, 1], [150, 560, -160, 1.1], [936, 590, -20, 1.1], [96, 860, 178, 1], [986, 860, 2, 1], [226, 405, -140, .8], [888, 430, -40, .8]].map(([x, y, a, k], i) => {
+    const g = el('g', {}, fx), inner = el('g', {}, g);
+    for (const [w, c] of [[24, '#fff'], [11, '#1A1030']]) [-26, 0, 26].forEach((o, j) => el('path', { d: `M0 ${o}Q${34} ${o * 1.25 - 6} ${j === 1 ? 74 : 56} ${o * 1.6}`, fill: 'none', stroke: c, 'stroke-width': w, 'stroke-linecap': 'round' }, inner));
+    return { g, x, y, a, k, i }; });
+  B.burstBack = el('path', { fill: '#FF3D7F', stroke: '#1A1030', 'stroke-width': 9, 'stroke-linejoin': 'round' }, fx);
+  B.burst = el('path', { fill: '#FFF15A', stroke: '#1A1030', 'stroke-width': 10, 'stroke-linejoin': 'round' }, fx);
+
+  /* ---- SHOT 1 ---- */
+  const tx = [196, 368, 540, 712, 884], tdy = [6, -16, 10, -12, 4], tr = [-7, 4, -3, 6, -5];
+  B.title = HZ(fx, { font: 'Resource Han Rounded', weight: 900, size: 172, white: 13, outer: 12, outerColor: '#FF3D7F', ext: 16, extColor: '#A3124F', gloss: .55,
+    fillStops: [[0, '#FFFBD6'], [.42, '#FFE23A'], [1, '#FF9A1F']],
+    chars: [...'今日份快乐'].map((ch, i) => ({ ch, x: tx[i], y: 1515 + tdy[i], rot: tr[i], t0: C.title[i], drop: 90, r0: (i % 2 ? 16 : -16) })) });
+  B.sp1 = [[100, 1372, 36, .80], [990, 1395, 26, .867], [948, 1660, 40, .933], [140, 1690, 24, 1.0], [560, 1330, 18, 1.067]].map(([x, y, r, t0]) => ({ x, y, r, t0, e: el('path', { d: sparkleD(r), fill: '#fff', stroke: '#FFD23F', 'stroke-width': 3.5, filter: 'url(#glow)' }, fx) }));
+  B.asideG = el('g', {}, fx);
+  const aclip = el('clipPath', { id: 'aclip' }, DEFS); B.aclip = [el('rect', { x: 40, y: 330, width: 0, height: 80 }, aclip), el('rect', { x: 40, y: 410, width: 0, height: 100 }, aclip)];
+  B.aside = HZ(B.asideG, { font: 'LXGW Marker Gothic', size: 66, white: 0, outer: 7, outerColor: '#5A3A22', ext: 5, extColor: '#3A2412', fill: '#FFFFFF', anchor: 'start',
+    chars: [{ ch: '（小声）', x: 70, y: 372, size: 46 }, { ch: '正在光合作用…', x: 92, y: 452 }] });
+  B.aside.items[0].fillEl.setAttribute('fill', '#FFE88A');
+  B.aside.root.setAttribute('clip-path', 'url(#aclip)');
+  mctx.font = '46px "LXGW Marker Gothic"'; B.aw1 = mctx.measureText('（小声）').width; mctx.font = '66px "LXGW Marker Gothic"'; B.aw2 = mctx.measureText('正在光合作用…').width;
+  B.aside.items.forEach(c => X(c.g, c.x, c.y));
+  /* battery gag: 光合作用 = solar charging */
+  B.batt = el('g', { filter: 'url(#soft)' }, fx);
+  el('rect', { x: -89, y: -37, width: 180, height: 92, rx: 24, fill: '#0E1440' }, B.batt); el('rect', { x: 91, y: -11, width: 22, height: 40, rx: 7, fill: '#0E1440' }, B.batt);
+  el('rect', { x: 84, y: -20, width: 22, height: 40, rx: 7, fill: '#1E2A78' }, B.batt);
+  el('rect', { x: -96, y: -46, width: 180, height: 92, rx: 24, fill: '#fff', stroke: '#1E2A78', 'stroke-width': 9 }, B.batt);
+  B.bars = [0, 1, 2].map(j => { const g = el('g', {}, B.batt); el('rect', { x: -21, y: -29, width: 42, height: 58, rx: 10, fill: '#7BE35A', stroke: '#1E2A78', 'stroke-width': 4 }, g); el('rect', { x: -13, y: -21, width: 9, height: 28, rx: 4.5, fill: '#fff', opacity: .7 }, g); return g; });
+  B.bolt = el('g', {}, B.batt); el('path', { d: 'M10 -44L-24 6L-3 6L-13 44L24 -8L3 -8Z', fill: '#FFE14D', stroke: '#1E2A78', 'stroke-width': 7, 'stroke-linejoin': 'round' }, B.bolt);
+  B.battL = el('g', {}, B.batt); ['M112 -62L136 -92', 'M128 -34L164 -46', 'M78 -76L82 -110'].forEach(d => el('path', { d, stroke: '#1E2A78', 'stroke-width': 9, 'stroke-linecap': 'round', fill: 'none' }, B.battL));
+  B.battLbl = HZ(fx, { font: 'Douyin Sans', weight: 700, size: 50, white: 0, outer: 7, outerColor: '#1E2A78', ext: 6, extColor: '#0E1440', fill: '#fff',
+    chars: [{ ch: '充电中…', x: 222, y: 738, t0: C.battery + 3 * FR, drop: 12 }, { ch: '满电！', x: 214, y: 738, size: 60, t0: C.charge[2] + 2 * FR, drop: 0, r0: -10 }] });
+  B.battLbl.items[1].fillEl.setAttribute('fill', '#FFE14D');
+
+  /* ---- SHOT 2 ---- */
+  const qs = [[250, 560, 200, -14, [[0, '#E6FCFF'], [.45, '#3FD8FF'], [1, '#1A86F0']]], [478, 430, 245, 6, [[0, '#FFE6F3'], [.45, '#FF68AE'], [1, '#E0247A']]], [760, 330, 290, 15, [[0, '#FFFBD6'], [.45, '#FFE23A'], [1, '#FF9A1F']]]];
+  B.qm = HZ(fx, { font: 'Resource Han Rounded', weight: 900, size: 245, white: 12, outer: 11, outerColor: '#1E2A78', ext: 15, extColor: '#0E1440', gloss: .5,
+    chars: qs.map(([x, y, s, r, st], i) => ({ ch: '？', x, y, size: s, rot: r, fillStops: st, t0: C.qmarks[i], drop: 0, r0: -20 })) });
+  B.quiet = HZ(fx, { font: 'LXGW Marker Gothic', size: 100, white: 8, outer: 10, outerColor: '#1E2A78', ext: 9, extColor: '#0E1440', skew: -7, filter: 'url(#soft2)', fillStops: [[0, '#FFFFFF'], [1, '#A9C4E0']],
+    chars: [...'空气突然安静'].map((ch, i) => ({ ch, x: 150 + [0, 10, -6, 8, -4, 6][i], y: 760 + i * 112, rot: [-5, 3, -2, 4, -3, 2][i], t0: C.quiet[i] })) });
+  B.sweat = C.sweat.map((t0, i) => { const g = el('g', {}, fx); el('path', { d: DROP_D, fill: '#8EE8FF', stroke: '#1E2A78', 'stroke-width': 6, 'stroke-linejoin': 'round' }, g); el('ellipse', { cx: -12, cy: 6, rx: 7, ry: 12, fill: '#fff', transform: 'rotate(18 -12 6)' }, g); return { g, t0, x: [880, 968][i], y: [560, 700][i], s: [1.35, 1][i] }; });
+
+  /* ---- SHOT 3 ---- */
+  B.tag = el('g', {}, fx);
+  B.tagPill = el('g', {}, B.tag);
+  el('rect', { x: -118, y: -26, width: 250, height: 70, rx: 35, fill: '#0E1440' }, B.tagPill);
+  el('rect', { x: -125, y: -35, width: 250, height: 70, rx: 35, fill: '#FF3D7F', stroke: '#1E2A78', 'stroke-width': 7 }, B.tagPill);
+  { const e = el('text', { y: 2, 'font-family': 'Douyin Sans', 'font-weight': 700, 'font-size': 40, fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central', 'letter-spacing': 6 }, B.tagPill); e.textContent = '本期嘉宾'; }
+  B.tagName = HZ(B.tag, { font: 'Resource Han Rounded', weight: 900, size: 164, white: 12, outer: 11, outerColor: '#1E2A78', ext: 14, extColor: '#0E1440', gloss: .5,
+    fillStops: [[0, '#7FE3FF'], [.5, '#2CCBF2'], [1, '#1E8FE0']],
+    chars: [{ ch: '警', x: 178, y: 1214, rot: -4, t0: C.tag[1], drop: 60, r0: -14 }, { ch: '长', x: 342, y: 1206, rot: 4, t0: C.tag[2], drop: 60, r0: 14 }] });
+  B.tagRib = el('g', {}, B.tag);
+  const ribD = 'M-150 -30L150 -30L138 -18L150 -6L138 6L150 18L150 30L-150 30L-138 18L-150 6L-138 -6L-150 -18Z';
+  el('path', { d: ribD, fill: '#0E1440', transform: 'translate(6 8)' }, B.tagRib);
+  el('path', { d: ribD, fill: '#FFE14D', stroke: '#1E2A78', 'stroke-width': 5, 'stroke-linejoin': 'round' }, B.tagRib);
+  { const e = el('text', { y: 2, 'font-family': 'LXGW Marker Gothic', 'font-size': 46, fill: '#1E2A78', 'text-anchor': 'middle', 'dominant-baseline': 'central', 'letter-spacing': 4 }, B.tagRib); e.textContent = '发量担当'; }
+
+  B.warn = el('g', {}, fx);
+  el('rect', { x: -420, y: -92, width: 840, height: 184, rx: 26, fill: '#1A1030' }, B.warn);
+  el('rect', { x: -408, y: -80, width: 816, height: 160, rx: 18, fill: '#FF2E4D' }, B.warn);
+  const hz = el('g', {}, B.warn); const clipR = el('clipPath', { id: 'wclip' }, DEFS); el('rect', { x: -408, y: -80, width: 816, height: 160, rx: 18 }, clipR); hz.setAttribute('clip-path', 'url(#wclip)');
+  for (let i = -12; i < 14; i++) { el('path', { d: `M${i * 64} -80l32 0l-26 22l-32 0z`, fill: '#FFE14D' }, hz); el('path', { d: `M${i * 64} 58l32 0l-26 22l-32 0z`, fill: '#FFE14D' }, hz); }
+  [-330, 330].forEach(x => { const g = el('g', { transform: `translate(${x} 0)` }, B.warn); el('path', { d: 'M0 -44L42 32L-42 32Z', fill: '#FFE14D', stroke: '#1A1030', 'stroke-width': 7, 'stroke-linejoin': 'round' }, g); el('rect', { x: -5, y: -18, width: 10, height: 30, rx: 4, fill: '#1A1030' }, g); el('circle', { cx: 0, cy: 22, r: 5.5, fill: '#1A1030' }, g); });
+  B.warnT = HZ(B.warn, { font: 'Alimama ShuHeiTi', weight: 700, size: 112, white: 0, outer: 7, outerColor: '#1A1030', ext: 7, extColor: '#1A1030', soft: false, fill: '#FFE14D',
+    chars: [...'前方高能'].map((ch, i) => ({ ch, x: -168 + i * 112, y: -2 })) });
+  B.warnT.items.forEach(c => X(c.g, c.x, c.y));
+  B.warnBlink = el('rect', { x: -408, y: -80, width: 816, height: 160, rx: 18, fill: '#fff', opacity: 0 }); B.warn.insertBefore(B.warnBlink, B.warnT.root);
+
+  const sx = [292, 548, 742, 826];
+  B.shock = HZ(fx, { font: 'Alimama ShuHeiTi', weight: 700, size: 250, white: 13, outer: 13, outerColor: '#1A1030', ext: 18, extColor: '#1A1030', extX: 6, skew: -8, gloss: .45,
+    fillStops: [[0, '#FF8A8A'], [.5, '#FF1E3C'], [1, '#C4001E']],
+    chars: [...'震惊！！'].map((ch, i) => ({ ch, x: sx[i], y: 1318 + [12, -10, -22, -34][i], rot: [-7, -3, 6, 12][i], t0: C.shock[Math.min(i, 2)] + (i === 3 ? FR : 0), drop: 0, r0: [-18, 14, 20, 24][i] })) });
+  const sub = [...'这发量合理吗？！']; B.sub = HZ(fx, { font: 'Douyin Sans', weight: 700, size: 92, white: 0, outer: 11, outerColor: '#16B9F0', ext: 10, extColor: '#0F2A6B', whiteColor: '#fff',
+    fill: '#FFFFFF', chars: sub.map((ch, i) => ({ ch, x: 540 - 3.3 * 90 + i * 90 + (i === 6 ? 10 : i === 7 ? -24 : 0), y: 1712 + (i % 2 ? -5 : 5), rot: 0, t0: C.subline + i * FR })) });
+  B.sub.root.setAttribute('transform', 'rotate(-3 540 1712)');
+  /* ---- 发量检测 meter sticker (second beat on the 7.00 brass stab) ---- */
+  B.meter = el('g', {}, fx);
+  { const g = B.meter, arcP = (a0, a1, r) => { const p = a => [Math.cos(a) * r, 58 + Math.sin(a) * r], [x0, y0] = p(a0), [x1, y1] = p(a1); return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
+    el('rect', { x: -161, y: -101, width: 340, height: 214, rx: 30, fill: '#1E2A78', opacity: .6 }, g);
+    el('rect', { x: -170, y: -112, width: 340, height: 214, rx: 30, fill: '#fff', stroke: '#1E2A78', 'stroke-width': 8 }, g);
+    [['#7BE35A', 1, 1.36], ['#FFE14D', 1.36, 1.7], ['#FF2E4D', 1.7, 2]].forEach(([c, a0, a1]) => el('path', { d: arcP(a0 * Math.PI, a1 * Math.PI, 100), fill: 'none', stroke: c, 'stroke-width': 34 }, g));
+    el('path', { d: arcP(Math.PI, 2 * Math.PI, 119), fill: 'none', stroke: '#1E2A78', 'stroke-width': 6, 'stroke-linecap': 'round' }, g);
+    for (let i = 0; i <= 10; i++) { const a = Math.PI * (1 + i / 10); el('path', { d: `M${(Math.cos(a) * 64).toFixed(1)} ${(58 + Math.sin(a) * 64).toFixed(1)}L${(Math.cos(a) * (i % 5 ? 76 : 82)).toFixed(1)} ${(58 + Math.sin(a) * (i % 5 ? 76 : 82)).toFixed(1)}`, stroke: '#1E2A78', 'stroke-width': i % 5 ? 4 : 6, 'stroke-linecap': 'round' }, g); }
+    const lb = (txt, x, c) => { const e = el('text', { x, y: 84, 'font-family': 'Douyin Sans', 'font-weight': 700, 'font-size': 26, fill: c, 'text-anchor': 'middle', 'dominant-baseline': 'central' }, g); e.textContent = txt; };
+    lb('正常', -100, '#1E2A78'); lb('爆表', 100, '#E8283C');
+    B.needle = el('g', {}, g); el('path', { d: 'M-11 0L0 -104L11 0Z', fill: '#1A1030', stroke: '#1A1030', 'stroke-width': 4, 'stroke-linejoin': 'round' }, B.needle);
+    el('circle', { cx: 0, cy: 58, r: 17, fill: '#FF3D7F', stroke: '#1A1030', 'stroke-width': 6 }, g);
+    const pill = el('g', { transform: 'translate(-58 -118) rotate(-4)' }, g);
+    el('rect', { x: -112, y: -30, width: 224, height: 62, rx: 31, fill: '#FF3D7F', stroke: '#1E2A78', 'stroke-width': 6 }, pill);
+    const pt = el('text', { y: 2, 'font-family': 'Douyin Sans', 'font-weight': 700, 'font-size': 40, fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central', 'letter-spacing': 4 }, pill); pt.textContent = '发量检测'; }
+  B.bao = HZ(fx, { font: 'Alimama ShuHeiTi', weight: 700, size: 104, white: 10, outer: 9, outerColor: '#1A1030', ext: 11, extColor: '#1A1030', skew: -8, gloss: .45,
+    fillStops: [[0, '#FFF3A0'], [.5, '#FFE14D'], [1, '#FF9A1F']],
+    chars: [...'爆表！'].map((ch, i) => ({ ch, x: 796 + i * 92 - (i === 2 ? 22 : 0), y: 528 + [0, -12, -22][i], rot: [6, 10, 14][i], t0: C.bao + i * FR, drop: 0, r0: [-16, 14, 22][i] })) });
+
+  /* ---- END CARD ---- */
+  B.sp2 = [[118, 1228, 46, 8.13], [966, 1270, 36, 8.197], [1004, 1560, 28, 8.263], [80, 1580, 32, 8.33], [960, 410, 42, 8.6], [128, 470, 28, 8.667], [540, 300, 22, 8.733]].map(([x, y, r, t0]) => ({ x, y, r, t0, e: el('path', { d: sparkleD(r), fill: '#fff', stroke: '#FFD23F', 'stroke-width': 3.5, filter: 'url(#glow)' }, fx) }));
+  B.jue = HZ(fx, { font: 'Douyin Sans', weight: 700, size: 250, white: 16, outer: 13, outerColor: '#4A1A8C', ext: 18, extColor: '#2A0B5A', gloss: .55,
+    fillStops: [[0, '#FFF0FA'], [.45, '#FF7FC8'], [1, '#B04CFF']],
+    chars: [...'绝绝子'].map((ch, i) => ({ ch, x: [282, 540, 798][i], y: 1400 + [14, -16, 8][i], rot: [-9, 3, 10][i], t0: C.jue[i], drop: 110, r0: [-20, 16, 22][i] })) });
+  B.bye = HZ(fx, { font: 'Douyin Sans', weight: 700, size: 168, white: 12, outer: 11, outerColor: '#FF3D7F', ext: 15, extColor: '#A3124F', gloss: .5,
+    fillStops: [[0, '#FFE14D'], [1, '#FF9A1F']],
+    chars: [...'下期见～'].map((ch, i) => ({ ch, x: 290 + i * 166 + (i === 3 ? -14 : 0), y: 1722, rot: [-5, 3, -4, 7][i], t0: C.bye + i * 2 * FR, drop: 60, r0: [-14, 10, -10, 18][i], bob: i === 3 ? 14 : undefined })) });
+  // stamp 猫主子认证
+  B.stamp = el('g', {}, fx); const st = el('g', { filter: 'url(#rough)' }, B.stamp);
+  el('circle', { r: 150, fill: '#E8283C' }, st); el('circle', { r: 131, fill: 'none', stroke: '#fff', 'stroke-width': 5 }, st); el('circle', { r: 94, fill: 'none', stroke: '#fff', 'stroke-width': 3 }, st);
+  const arc = el('path', { id: 'arcT', d: 'M-112 0A112 112 0 0 1 112 0', fill: 'none' }, DEFS); const arc2 = el('path', { id: 'arcB', d: 'M-112 0A112 112 0 0 0 112 0', fill: 'none' }, DEFS);
+  const tp = (id, txt, dy) => { const tt = el('text', { 'font-family': 'Luckiest Guy', 'font-size': 29, fill: '#fff', 'letter-spacing': 3, dy }, st); const p = el('textPath', { href: '#' + id, startOffset: '50%', 'text-anchor': 'middle' }, tt); p.textContent = txt; };
+  tp('arcT', 'MIAOWU DIARY', 10); tp('arcB', '★ OFFICIAL ★', 22);
+  const t1 = el('text', { 'font-family': 'Alimama ShuHeiTi', 'font-weight': 700, 'font-size': 58, fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central', y: -26 }, st); t1.textContent = '猫主子';
+  const t2 = el('text', { 'font-family': 'Alimama ShuHeiTi', 'font-weight': 700, 'font-size': 70, fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central', y: 40, 'letter-spacing': 8 }, st); t2.textContent = '认证';
+
+  /* ---- program badge (persistent) ---- */
+  B.badgeArt = el('g', { id: 'badgeArt' }, DEFS); B.badge = el('g', {}, fx); B.bcl = Array.from({ length: 48 }, () => el('use', { href: '#badgeArt' }, B.badge));
+  el('path', { d: 'M24 18L44 -16L66 18Z M170 18L192 -16L212 18Z', fill: '#FFE14D', stroke: '#1E2A78', 'stroke-width': 7, 'stroke-linejoin': 'round' }, B.badgeArt);
+  el('rect', { x: 0, y: 8, width: 236, height: 86, rx: 30, fill: '#FFE14D', stroke: '#1E2A78', 'stroke-width': 7 }, B.badgeArt);
+  const bt = el('text', { x: 118, y: 53, 'font-family': 'ZCOOL KuaiLe', 'font-size': 52, fill: '#1E2A78', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, B.badgeArt); bt.textContent = '喵呜日记';
+  const tag = el('g', { transform: 'translate(250 34) rotate(8)' }, B.badgeArt);
+  el('rect', { x: 0, y: 0, width: 108, height: 50, rx: 14, fill: '#FF3D7F', stroke: '#1E2A78', 'stroke-width': 6 }, tag);
+  const tg = el('text', { x: 54, y: 28, 'font-family': 'Luckiest Guy', 'font-size': 32, fill: '#fff', 'text-anchor': 'middle', 'dominant-baseline': 'central' }, tag); tg.textContent = 'EP.07';
+
+  fx.appendChild(B.wipe); fx.appendChild(B.badge);   // wipe covers captions; program badge stays on top
+  await Promise.all(['i1', 'e6', 'e11', 'e16', 'i2', 'i3', ...HERO].map(id => $(id).decode()));
+}
+
+/* ---------- frame ---------- */
+window.renderAt = async (t) => {
+  { const tf = Math.round(t * 30) / 30;   // cut frames must be weight 0 or 1: no sub-sample may straddle a cut
+    for (const c of [C.scratch, C.drop, C.freeze]) { if (tf >= c - 1e-6 && t < c) t = c; else if (tf < c - 1e-6 && t >= c) t = c - 1e-4; } }
+  const fN = Math.round(t * 30), HOLD = C.freeze_hold, TPOP = C.freeze + HOLD, TOUT = C.freeze + 4 * FR;
+  const s1 = $('s1'), s2 = $('s2'), s3 = $('s3'), cw = $('cardwrap');
+  const inS1 = t < C.scratch, inS2 = t >= C.scratch && t < C.wipe, inS3 = t >= C.wipe;
+  s1.style.visibility = inS1 ? 'visible' : 'hidden';
+  s2.style.visibility = inS2 ? 'visible' : 'hidden';
+  cw.style.visibility = inS3 ? 'visible' : 'hidden';
+  $('bg').style.visibility = t >= C.freeze ? 'visible' : 'hidden';
+  const K6 = kick(t, C.drop, 26, 7, 11), K3 = kick(t, C.punch2, 10, 10, 13), K25 = kick(t, C.scratch, 12, 12, 14), K85 = kick(t, C.stamp, 14, 10, 13);
+
+  /* shot 1: sunbathing, slow push */
+  if (inS1) {
+    const up = t - C.charge[2], pz = up < 0 ? 0 : up < 2 * FR ? E.outQuad(up / (2 * FR)) : Math.exp(-(up - 2 * FR) * 6);
+    const h = addK(hand(t, 1, .8), kick(t, C.charge[2], 7, 12, 14)), Z = lerp(1.02, 1.1, E.inOutSine(clamp(t / 2.5))) * (1 + .15 * (1 - E.outExpo(clamp(t / (4 * FR))))) * (1 + .06 * pz);
+    place($('i1'), PL.i1, Z, 640, 900, h); $('sun').style.opacity = (.6 + .1 * Math.sin(t * 2.1)).toFixed(3); s1.style.transform = `rotate(${h.r}deg)`;
+    $('i1').style.filter = 'saturate(1.22) contrast(1.06) brightness(1.05)';
+    /* ear flick on the squeak (4 frames: 11/16/11/6 deg overlay sprites, same placement as #i1) */
+    const ef = fN - Math.round(C.ear * 30), ek = ef >= 0 && ef < 4 ? ['e11', 'e16', 'e11', 'e6'][ef] : '';
+    for (const id of ['e6', 'e11', 'e16']) { const on = id === ek; $(id).style.visibility = on ? 'visible' : 'hidden';
+      if (on) { place($(id), PL.i1, Z, 640, 900, h); $(id).style.filter = $('i1').style.filter; } }
+  } else for (const id of ['e6', 'e11', 'e16']) $(id).style.visibility = 'hidden';
+  /* shot 2: side-eye; snap settle on the cut, punch-in on the eyes at 3.0 */
+  if (inS2) {
+    const h = addK(hand(t, 2, 1), K25, K3);
+    const zc = 1 + .1 * Math.exp(-(t - C.scratch) * 14);
+    const zp = t < C.punch2 ? 0 : E.outQuart(clamp((t - C.punch2) / (4 * FR)));
+    const Z = zc * lerp(1.0, 1.36, zp) * (1 + .015 * (t - C.scratch));
+    place($('i2'), PL.i2, Z, lerp(540, 600, zp), lerp(1080, 1010, zp), h, lerp(PL.i2.fx, .64, zp), lerp(.6, .58, zp));  // punch into ONE staring eye s2.style.transform = `rotate(${h.r}deg)`;
+    $('i2').style.filter = 'saturate(1.08) contrast(1.08)';
+  }
+  /* shot 3: creep, anticipation pull-back, SNAP punch-in at the drop, freeze at 7.5 */
+  if (inS3) {
+    const tt = Math.min(t, C.freeze), hero = tt >= C.drop, zb = $('zb'), i3 = $('i3');
+    let h;
+    if (!hero) {   // radial zoom-blur on snap frames: 16 in-page sub-samples of the frame's shutter, identical for every harness sample (no stepped copies)
+      const tf = Math.min(fN * FR, C.drop - 1e-4), a = plate3(tf - .25 * FR), b = plate3(Math.min(tf + .25 * FR, C.drop - 1e-4));
+      const P = plate3(tt); h = P.h;
+      if (Math.abs(b.g.S / a.g.S - 1) > .035) {
+        const cx = zb.getContext('2d'); cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, 1080, 1920); const n = 16;
+        for (let i = 0; i < n; i++) { const g = plate3(Math.min(tf + (i / (n - 1) - .5) * .5 * FR, C.drop - 1e-4)).g; cx.globalAlpha = 1 / (i + 1); cx.drawImage(i3, g.x, g.y, PL.i3.iw * g.S, PL.i3.ih * g.S); }
+        zb.style.visibility = 'visible'; i3.style.visibility = 'hidden'; h = plate3(tf).h;
+      } else { zb.style.visibility = 'hidden'; i3.style.visibility = 'inherit';
+        i3.style.width = PL.i3.iw + 'px'; i3.style.height = PL.i3.ih + 'px'; i3.style.transform = `translate(${P.g.x.toFixed(2)}px,${P.g.y.toFixed(2)}px) scale(${P.g.S.toFixed(5)})`; }
+    } else { h = addK(hand(tt, 3, 1.3), kick(tt, C.drop, 26, 7, 11), kick(tt, C.meter, 14, 9, 13)); zb.style.visibility = 'hidden'; }
+    s3.style.transform = `rotate(${h.r}deg)`;
+    i3.style.filter = 'saturate(1.2) contrast(1.06)';
+    rays.style.visibility = hero ? 'visible' : 'hidden'; disp($('cutw'), hero);
+    if (hero) { const u = tt - C.drop, Zc = lerp(.8, .86, E.outCubic(clamp(u / 1.5))), fq = Math.round(tt * 30), fd = fq - Math.round(C.drop * 30), fm = fq - Math.round(C.meter * 30);
+      // 炸毛 sprites: grow 0.6 -> 1.2 overshoot -> boiled 1.0 (3 drawings @12 fps); the 7.00 re-hit puffs to 1.35
+      const pick = fm >= 0 && fm < 2 ? 'hL135' : (fm >= 2 && fm < 4) || (fd >= 2 && fd < 4) ? 'hL12' : fd < 2 ? 'hL06' : 'hB' + (Math.floor(tt * 12) % 3);
+      for (const id of HERO) { const on = id === pick; $(id).style.visibility = on ? 'visible' : 'hidden'; if (on) place($(id), PL.hero, Zc, 540, 880, h, .53, .51, true); }
+      const um = tt - C.meter, q = um >= 0 ? .06 * Math.exp(-um * 9) * Math.cos(um * 26) : 0, pop = 1 + .05 * Math.exp(-Math.max(0, u - FR) * 14);
+      $('cutw').style.transform = `scale(${(pop * (1 + q)).toFixed(4)},${(pop * (1 - .7 * q)).toFixed(4)})`; }
+    B.raysG.setAttribute('transform', `translate(540 760) rotate(${(8 + (tt - C.drop) * 14).toFixed(2)})`);
+    // freeze -> card
+    const uf = t - C.freeze, uh = (uf - HOLD) / (11 * FR);
+    const p = uf < HOLD ? 0 : uh < 1 ? E.inOutSine(uh) : 1 + .035 * Math.exp(-(uh - 1) * 2.2) * Math.sin((uh - 1) * 4.4), e = clamp(p, 0, 1.06);
+    const zf = uf >= 0 ? lerp(1, 1.03, E.outCubic(clamp(uf / HOLD))) : 1;
+    s3.style.filter = uf >= 0 ? `saturate(${lerp(.7, 1, clamp(p)).toFixed(3)})` : 'none';
+    const sc = lerp(zf, .72, p), rot = lerp(0, -4, p) + (t >= C.stamp ? K85.r * 12 : 0), ty = lerp(0, -40, p);
+    const kx = t >= C.stamp ? K85.x : 0, ky = t >= C.stamp ? K85.y : 0;
+    cw.style.transform = `translate(${kx}px,${ty + ky}px) translate(540px,960px) rotate(${rot}deg) scale(${sc}) translate(-540px,-960px)`;
+    const T = 190 * e, Bm = 560 * e, L = 70 * e, b = 30 * e;
+    s3.style.clipPath = p > 0 ? `inset(${T}px ${L}px ${Bm}px ${L}px round ${30 * e}px)` : 'none';
+    const cb = $('cardborder'); cb.style.display = p > 0 ? 'block' : 'none';
+    Object.assign(cb.style, { left: (L - b) + 'px', top: (T - b) + 'px', width: (1080 - 2 * L + 2 * b) + 'px', height: (1920 - T - Bm + 2 * b) + 'px', boxShadow: `0 ${34 * e}px ${60 * e}px rgba(8,40,70,${.4 * e})` });
+  }
+  bgPat.setAttribute('patternTransform', `rotate(-35) translate(${(t * 36) % 92} 0)`);
+
+  /* fx layer follows impacts */
+  const FK = t >= C.drop && t < C.freeze ? K6 : inS2 ? addK(K25, K3) : { x: 0, y: 0, r: 0 };
+  const off = { x: FK.x * .6, y: FK.y * .6 };
+
+  // title + sparkles (shot 1)
+  for (const [i, c] of B.title.items.entries()) {   // pop-in, then a squash-and-hop wave on each quarter beat
+    const f = charXf(t, c, { wig: 2.2, bob: 4 }); if (!f || t >= C.scratch) { show(c.g, false); continue; } show(c.g, true);
+    let hy = 0, sq = 0;
+    for (const b of C.title_beats) { const u = t - b - i * 2 * FR, air = .24;
+      if (u > -.07 && u < 0) sq += .11 * (u + .07) / .07;
+      else if (u >= 0 && u < air) { const k = u / air; hy += 40 * 4 * k * (1 - k); sq += (k < .15 ? .11 * (1 - k / .15) : 0) - .07 * Math.sin(Math.PI * k); }
+      else if (u >= air && u < air + .16) { const w = (u - air) / .16; sq += .13 * Math.exp(-w * 3) * Math.cos(w * 7.5); } }
+    X(c.g, c.x + off.x, c.y + f.y - hy + off.y + 60 * sq, c.rot + f.r, f.s * (1 + sq), f.s * (1 - sq));
+  }
+  { const u = t - C.battery, v = u >= 0 && t < C.scratch; disp(B.batt, v); disp(B.battLbl.root, v);
+    if (v) { const full = t - C.charge[2]; let s = spring(u, .5, 22), sy = s;
+      if (full >= 0) { const w = Math.exp(-full * 9) * Math.sin(full * 40); s *= 1 + .13 * w; sy *= 1 - .13 * w; }
+      for (const [j, b] of B.bars.entries()) { const ub = t - C.charge[j]; show(b, ub >= 0); if (ub >= 0) { const k = spring(ub, .5, 28); X(b, -54 + j * 52, 29 - 29 * k, 0, 1, k); } }
+      X(B.bolt, -92, -40, -14 + 8 * Math.sin(2 * Math.PI * 2.2 * t), .9 + .1 * Math.sin(2 * Math.PI * 4.4 * t));
+      show(B.battL, full >= 0); if (full >= 0) B.battL.setAttribute('transform', `scale(${spring(full, .45, 26).toFixed(3)})`);
+      X(B.batt, 222 + off.x, 622 + 3 * Math.sin(2 * Math.PI * 1.1 * t) + off.y, lerp(-16, -5, spring(u, .45, 18)) + 1.6 * Math.sin(2 * Math.PI * .9 * t), s, sy); }
+    for (const [j, c] of B.battLbl.items.entries()) { const f = charXf(t, c, { wig: 1.2, bob: 2 }), vis = f && t < (j ? C.scratch : C.charge[2]); show(c.g, !!vis); if (vis) X(c.g, c.x + off.x, c.y + f.y + off.y, c.rot + f.r, f.s); } }
+  for (const sp of B.sp1) { const u = t - sp.t0; const v = u >= 0 && t < C.scratch; show(sp.e, v); if (v) X(sp.e, sp.x, sp.y, u * 40 + sp.x, spring(u, .4, 26) * (.8 + .2 * Math.sin(2 * Math.PI * 1.8 * t + sp.x))); }
+  { const u = t - C.aside, v = u >= 0 && t < C.scratch; show(B.asideG, v);
+    if (v) { const n = Math.floor(u * 30) + 1, k1 = clamp(n / 4), k2 = clamp((n - 4) / 7);
+      B.aclip[0].setAttribute('width', (k1 * (B.aw1 + 40)).toFixed(1)); B.aclip[1].setAttribute('width', (k2 * (B.aw2 + 70)).toFixed(1));
+      const s = .92 + .08 * spring(u, .6, 22), w = Math.sin(2 * Math.PI * .7 * t) * .8;
+      B.asideG.setAttribute('transform', `translate(${off.x} ${off.y}) rotate(${-4 + w} 300 420) translate(300 420) scale(${s}) translate(-300 -420)`); } }
+
+  // ??? hop on the beat
+  for (const [i, c] of B.qm.items.entries()) {
+    const f = charXf(t, c, { wig: 0, bob: 0 }); if (!f || t >= C.wipe) { show(c.g, false); continue; } show(c.g, true);
+    const u = t - c.t0, ph = ((t - 2.75 - i * .083) / .5 % 1 + 1) % 1, on = clamp((u - .2) / .15);
+    const hop = on * 46 * 4 * ph * (1 - ph), sq = on * Math.exp(-Math.pow(Math.min(ph, 1 - ph) / .07, 2));
+    X(c.g, c.x + off.x, c.y - hop + off.y, c.rot + f.r + on * 5 * Math.sin(2 * Math.PI * ph), f.s * (1 + .12 * sq), f.s * (1 - .14 * sq));
+  }
+  driveHZ(t, B.quiet, { until: C.wipe, z: .82, w: 34, wig: .6, bob: 1, wf: .6 }, off);
+  for (const d of B.sweat) {
+    const u = t - d.t0, v = u >= 0 && t < C.wipe; show(d.g, v); if (!v) continue;
+    const s = spring(u, .5, 24) * d.s, slide = 74 * E.inQuad(clamp((u - .15) / .75));
+    d.g.setAttribute('opacity', (1 - clamp((u - .75) / .2)).toFixed(3));
+    X(d.g, d.x + off.x, d.y + slide + off.y, 12, s * (1 - .05 * clamp(slide / 74)), s * (1 + .12 * clamp(slide / 74)));
+  }
+  // candy wipe
+  { const tw = fN * FR, u = (tw - (C.wipe - .23)) / .46, v = u > 0 && u < 1; show(B.wipe, v);   // frame-quantised: crisp opaque graphic band, no translucent blur
+    if (v) { const c = lerp(2400, -2400, E.inOutSine(u)); B.wipe.setAttribute('transform', 'translate(540 960) rotate(-20)'); B.wband.setAttribute('transform', `translate(${c.toFixed(1)} 0)`);
+      B.wpat[0].setAttribute('patternTransform', `rotate(50) translate(${((tw * 30 * 60) % 128).toFixed(1)} 0)`); } }
+  // 嘉宾 name tag: slides in after the wipe, gets knocked by the banner slam, pops out to clear the stage before the drop
+  { const v = t >= C.tag[0] && t < C.tagOut + .2; disp(B.tag, v);
+    if (v) { const fl = t >= C.warn ? E.outBack(clamp((t - C.warn) / (4 * FR))) : 0, ud = t - C.warn - 4 * FR, sw = ud > 0 ? 6 * Math.exp(-ud * 5) * Math.sin(ud * 17) : 0;
+      B.tag.setAttribute('transform', `translate(0 ${(-60 * fl).toFixed(2)}) rotate(${(-12 * fl + sw).toFixed(3)} 110 1180)`);
+      const K = { x: 0, y: 0, r: 0 }, tOut = C.tagOut, out = t >= tOut ? clamp((t - tOut) / .17) : 0;
+      const oS = out <= 0 ? 1 : out < .3 ? 1 + .12 * E.outQuad(out / .3) : 1.12 * (1 - E.inCubic((out - .3) / .7)), u0 = t - C.tag[0];
+      X(B.tagPill, 215 - 260 * (1 - spring(u0, .62, 20)) + K.x, 1085 + K.y + 2 * Math.sin(2 * Math.PI * 1.1 * t + .5), -4 + 1.5 * Math.sin(2 * Math.PI * .9 * t) + K.r * 10, spring(u0, .5, 22) * oS);
+      for (const c of B.tagName.items) { const f = charXf(t, c, { wig: 2, bob: 3, t1: tOut + FR }); show(c.g, !!f); if (f) X(c.g, c.x + K.x, c.y + f.y + K.y, c.rot + f.r + K.r * 10, f.s); }
+      const ur = t - C.tag[3]; show(B.tagRib, ur >= 0);
+      if (ur >= 0) { const k = ur < .1 ? lerp(1.7, 1, E.inQuad(ur / .1)) : 1 - .06 * Math.exp(-(ur - .1) * 16) * Math.cos((ur - .1) * 44);
+        B.tagRib.setAttribute('opacity', clamp(ur / .05).toFixed(3));
+        X(B.tagRib, 330 + K.x, 1322 + K.y, -6 - (ur < .1 ? 8 * (1 - ur / .1) : 0) + Math.sin(2 * Math.PI * .8 * t) + K.r * 10, k * oS); } } }
+  // warning banner
+  { const u = t - C.warn, v = u >= 0 && t < C.drop; show(B.warn, v);
+    if (v) { const s = lerp(1.7, 1, spring(u, .5, 24)), r = lerp(-14, -5, spring(u, .45, 20)), jit = t > C.push[0] ? (h1(Math.floor(t * 15)) - .5) * 14 : 0;
+      X(B.warn, 540 + jit, 1470 + (t > C.push[0] ? (h1(Math.floor(t * 15) + 99) - .5) * 8 : 0), r, s);
+      const bl = C.warn_beeps.concat(C.push).some(b => t >= b && t < b + 2 * FR); B.warnBlink.setAttribute('opacity', bl ? .55 : 0); } }
+  // hero: focus lines, burst, 震惊!!, subline
+  { const hero = t >= C.drop && t < TOUT + .17, boil = Math.floor(Math.min(t, C.freeze) * 12) % 3, po = popOut(t, TOUT);
+    const fm = fN - Math.round(C.meter * 30), rh = fm >= 0 && fm < 3 ? [[10, -5], [-10, 6], [6, -3]][fm] : [0, 0];   // 3-frame re-hit shake on the 7.00 stab
+    const offH = { x: off.x + rh[0], y: off.y + rh[1] }, rb = fm >= 0 ? 1 + .1 * Math.exp(-(t - C.meter) * 12) : 1;
+    show(B.focus, hero && t < TOUT); show(B.burst, hero); show(B.burstBack, hero);
+    for (const pm of B.puff) { show(pm.g, hero); if (hero) { const u = t - C.drop - FR - pm.i * .5 * FR, k = spring(u, .45, 26), bj = Math.floor(Math.min(t, C.freeze) * 12) + pm.i * 7;
+      const d = 34 * (1 - clamp(k)) + 5 * Math.sin(2 * Math.PI * 1.3 * t + pm.i), ar = pm.a * Math.PI / 180;
+      X(pm.g, pm.x + off.x + d * Math.cos(ar) + (h1(bj) - .5) * 5, pm.y + off.y + d * Math.sin(ar) + (h1(bj + 3) - .5) * 5, pm.a + (h1(bj + 5) - .5) * 7, Math.max(0, k) * pm.k * po); } }
+    if (hero) {
+      const u = t - C.drop; B.focus.setAttribute('d', focusD(540, 700, 300 + boil)); B.focus.setAttribute('opacity', (.95 - .25 * clamp(u / .6)).toFixed(3));
+      const bs = spring(u + 2 * FR, .42, 24) * po * rb, cx = 540 + offH.x, cy = 1330 + offH.y;
+      B.burst.setAttribute('d', burstD(0, 0, 432, 288, 15, 100 + boil)); B.burstBack.setAttribute('d', burstD(0, 0, 452, 304, 15, 200 + boil));
+      X(B.burst, cx, cy, -5 + 1.2 * Math.sin(t * 7), bs); X(B.burstBack, cx + 16, cy + 18, -3, bs);
+    }
+    driveHZ(t, B.shock, { from: C.drop, t1: TOUT, wig: 2.4, bob: 3, wf: 1.6 }, offH);
+    driveHZ(t, B.sub, { t1: TOUT, z: .6, w: 28, wig: 1.2, bob: 2 }, off);
+    // 发量检测 meter: slams in on the 7.00 stab, needle whips 0 -> 爆表 in 4 frames (outBack), then buzzes against the stop
+    { const um = t - (C.meter - 3 * FR), v = um >= 0 && t < TOUT + .17; disp(B.meter, v); disp(B.bao.root, v);
+      if (v) { let s, o = 1; if (t < C.meter) { const k = um / (3 * FR); s = lerp(1.9, 1, E.inQuad(k)); o = clamp(k * 2.5); } else { const w = t - C.meter; s = 1 - .08 * Math.exp(-w * 16) * Math.cos(w * 44); }
+        s *= po; B.meter.setAttribute('opacity', o.toFixed(3)); const mk = kick(t, C.meter, 10, 10, 13);
+        X(B.meter, 826 + mk.x + off.x * .5, 318 + mk.y + off.y * .5, 7 + (t < C.meter ? 8 * (1 - um / (3 * FR)) : 0) + .8 * Math.sin(t * 2.6), s);
+        const wn = clamp((t - C.needle[0]) / (C.needle[1] - C.needle[0])), buzz = t >= C.needle[1] ? 3.5 * Math.sin(2 * Math.PI * 17 * t) * (.4 + .6 * Math.exp(-(t - C.needle[1]) * 5)) : 0;
+        B.needle.setAttribute('transform', `translate(0 58) rotate(${(lerp(-88, 96, E.outBack(wn)) + buzz).toFixed(2)})`);
+        driveHZ(t, B.bao, { t1: TOUT, wig: 3, bob: 3, wf: 1.8 }, { x: mk.x, y: mk.y }); } }
+  }
+  // end card
+  driveHZ(t, B.jue, { wig: 2.6, bob: 5, wf: 1.0 });
+  for (const sp of B.sp2) { const u = t - sp.t0; show(sp.e, u >= 0); if (u >= 0) X(sp.e, sp.x, sp.y, u * 50 + sp.y, spring(u, .4, 26) * (.78 + .22 * Math.sin(2 * Math.PI * 1.6 * t + sp.y))); }
+  driveHZ(t, B.bye, { wig: 2, bob: 7, wf: 1.2 });
+  { const u = t - (C.stamp - .13), v = u >= 0; show(B.stamp, v);
+    if (v) { let s, o = 1; if (t < C.stamp) { const k = u / .13; s = lerp(2.5, 1, E.inQuad(k)); o = clamp(k * 2.2); } else { const w = t - C.stamp; s = 1 - .09 * Math.exp(-w * 16) * Math.cos(w * 44); }
+      B.stamp.setAttribute('opacity', o); X(B.stamp, 812 + K85.x * .5, 1085 + K85.y * .5, -14 + (t < C.stamp ? -10 * (1 - u / .13) : 0) + .8 * Math.sin(t * 2.2), s); } }
+  // badge (persistent) with a tiny idle bob + ear twitch
+  { const bx = t => { let cxp = 224, cyp = 142 + 2 * Math.sin(t * 2.4), br = .6 * Math.sin(t * 1.7), bs = 1;
+      if (t < 10 * FR) { const a = clamp(t / (3 * FR)), k = E.outBack(clamp((t - 3 * FR) / (7 * FR)));
+        bs = lerp(lerp(2.4, 2.0, E.outQuad(a)), 1, k); cxp = lerp(540, 224, k); cyp = lerp(820, 142, k); br = lerp(-6, 0, k); }
+      const us = t - C.sting;
+      if (us >= 0 && us < .36) { const m = spring(us, .42, 30) * (1 - E.inCubic(clamp((us - .2) / .16)));
+        bs = lerp(1, 2.6, m); cxp = lerp(cxp, 540, clamp(m)); cyp = lerp(cyp, 940, clamp(m)); br = lerp(br, -4, clamp(m)); }
+      return [cxp - 170 * bs, cyp - 50 * bs, br, bs]; };
+    // fast frames: 24 in-page sub-samples across the shutter (frame-quantised, so every harness sample is identical -> one continuous smear)
+    const tf = fN * FR, a = bx(tf - .25 * FR), b = bx(tf + .25 * FR), fast = Math.hypot(b[0] - a[0], b[1] - a[1]) + 180 * Math.abs(b[3] - a[3]) > 8;
+    B.bcl.forEach((u, i) => { if (!fast && i) { show(u, false); return; } show(u, true);
+      const v = fast ? bx(tf + (i / 47 - .5) * .5 * FR) : bx(t); X(u, v[0], v[1], v[2], v[3]); u.setAttribute('opacity', fast ? (1 / (i + 1)).toFixed(4) : '1'); }); }
+  // flashes
+  let fl = fN === Math.round(C.drop * 30) ? 1 : fN === Math.round(C.freeze * 30) ? .85 : 0;
+  for (const p of C.push) if (fN === Math.round(p * 30)) fl = .2;
+  $('flash').style.opacity = fl.toFixed(3);
+  $('vig').style.opacity = t >= C.freeze ? .0 : 1;
+  const fi = Math.round(t * 30); $('grain').style.backgroundPosition = `${Math.floor(h1(fi) * 2048)}px ${Math.floor(h1(fi + 777) * 2048)}px`;
+};
+build().then(() => { window.__ready = true; });
+</script>
+</body></html>

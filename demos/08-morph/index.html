@@ -1,0 +1,901 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+@font-face{font-family:'Outfit Morph';src:url('/demos/08-morph/assets/fonts/Outfit-SemiBold.ttf') format('truetype');font-weight:1 1000;font-display:block}
+html,body{margin:0;background:#000;overflow:hidden}
+canvas{display:block}
+</style></head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<svg id="svg" width="0" height="0" style="position:absolute;left:-10px;top:-10px"></svg>
+<script>
+(async function () {
+const W = 1920, H = 1080, FPS = 30, FR = 1 / FPS;
+window.DEMO = { width: W, height: H, fps: FPS, duration: 10, motionBlur: { samples: 4, shutter: 0.5 } };
+const cues = await (await fetch('/demos/08-morph/cues.json')).json();
+const GL = await (await fetch('/demos/08-morph/glyphs.json')).json();
+// reel v5 (only with ?v5=1): the end wordmark becomes the style name 形变动画, window.linkAt(t), ?nolink=dot,title
+const QS = new URLSearchParams(location.search), V5 = QS.get('v5') === '1';
+const NOLINK = new Set(V5 ? (QS.get('nolink') || '').split(',').map(s => s.trim()).filter(Boolean) : []);
+const HIDE_DOT = NOLINK.has('dot'), HIDE_TITLE = NOLINK.has('title');
+// v5.1: the end card sits on the film's cream paper, the title is ink and built from the film's own parts (buildGV51)
+const cv = document.getElementById('c'); let ctx = cv.getContext('2d');
+const off = document.createElement('canvas'); off.width = 1920; off.height = 1080; const octx = off.getContext('2d');
+const C = { ink: '#16151B', cream: '#F4EEE3', mari: '#FFB627', verm: '#FF4F2B', ultra: '#2438E8' };
+
+// ---------------------------------------------------------------- math / easing / colour
+const clamp = (x, a = 0, b = 1) => x < a ? a : x > b ? b : x, lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const deg = Math.PI / 180;
+const qT = x => Math.round(x * FPS) / FPS, SH = 0.5 / FPS;   // frame-centre time (identical for every harness mb sample) + the 0.5 shutter (s)
+const EXI = x => x <= 0 ? 0 : x >= 1 ? 1 : (Math.pow(2, 10 * x) - 1) / 1023;   // expo-in
+function bez(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx, cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = t => ((ax * t + bx) * t + cx) * t, sy = t => ((ay * t + by) * t + cy) * t;
+  return x => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x;
+    for (let i = 0; i < 40; i++) { const v = sx(t); if (Math.abs(v - x) < 1e-7) break; if (v < x) lo = t; else hi = t; t = (lo + hi) / 2; }
+    return sy(t); };
+}
+const EM = bez(0.7, 0, 0.3, 1);          // the morph curve from the brief
+const EO = bez(0.16, 1, 0.3, 1);         // expo-out (field blooms, arrivals)
+const EIO = bez(0.45, 0, 0.55, 1);
+const EB = bez(0.42, 0, 0.12, 1);          // field bloom
+const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const toLin = c => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+const toSrgb = c => c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function oklab(h) { const [r, g, b] = hexRgb(h).map(toLin);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b), m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b), s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s, 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s]; }
+function fromOklab([L, a, b]) {
+  const l = Math.pow(L + 0.3963377774 * a + 0.2158037573 * b, 3), m = Math.pow(L - 0.1055613458 * a - 0.0638541728 * b, 3), s = Math.pow(L - 0.0894841775 * a - 1.2914855480 * b, 3);
+  const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, bb = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s;
+  return '#' + [r, g, bb].map(c => Math.round(clamp(toSrgb(clamp(c))) * 255).toString(16).padStart(2, '0')).join(''); }
+const mixC = (h1, h2, t) => t <= 0 ? h1 : t >= 1 ? h2 : fromOklab(oklab(h1).map((v, i) => lerp(v, oklab(h2)[i], t)));
+const tone = (h, dL) => { const A = oklab(h); A[0] += dL; return fromOklab(A); };
+
+// ---------------------------------------------------------------- geometry
+const NB = 240, NH = 72, NM = 24, NS = 60;
+const svg = document.getElementById('svg');
+function sampleD(d, n, closed = true) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path'); p.setAttribute('d', d); svg.appendChild(p);
+  const L = p.getTotalLength(), o = [], den = closed ? n : n - 1;
+  for (let i = 0; i < n; i++) { const q = p.getPointAtLength(L * i / den); o.push([q.x, q.y]); }
+  svg.removeChild(p); return o;
+}
+const area = P => { let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } return a / 2; };
+const orient = P => area(P) < 0 ? P.slice().reverse() : P;
+const centroid = P => { let x = 0, y = 0; for (const p of P) { x += p[0]; y += p[1]; } return [x / P.length, y / P.length]; };
+function resamplePoly(P, n) {
+  const L = [0]; for (let i = 1; i <= P.length; i++) { const a = P[i - 1], b = P[i % P.length]; L.push(L[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+  const tot = L[P.length], o = []; let j = 0;
+  for (let i = 0; i < n; i++) { const s = tot * i / n; while (L[j + 1] < s) j++; const a = P[j], b = P[(j + 1) % P.length], u = (s - L[j]) / ((L[j + 1] - L[j]) || 1); o.push([lerp(a[0], b[0], u), lerp(a[1], b[1], u)]); }
+  return o;
+}
+const circ = (cx, cy, r, n) => Array.from({ length: n }, (_, i) => { const a = 2 * Math.PI * i / n; return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; });
+function bestShift(A, B) { const n = A.length; let best = Infinity, bs = 0;
+  for (let s = 0; s < n; s++) { let e = 0; for (let i = 0; i < n; i += 2) { const b = B[(i + s) % n], dx = A[i][0] - b[0], dy = A[i][1] - b[1]; e += dx * dx + dy * dy; if (e >= best) break; } if (e < best) { best = e; bs = s; } }
+  return bs; }
+const shiftP = (B, s) => B.map((_, i) => B[(i + s) % B.length]);
+const alignTo = (A, B) => shiftP(B, bestShift(A, B));
+const lerpP = (A, B, t) => A.map((a, i) => [lerp(a[0], B[i][0], t), lerp(a[1], B[i][1], t)]);
+const rep = (p, n) => Array.from({ length: n }, () => [p[0], p[1]]);
+const S = d => orient(sampleD(d, NB));
+function rpoly(pts, r) { const n = pts.length; let d = '';
+  for (let i = 0; i < n; i++) { const p = pts[i], a = pts[(i - 1 + n) % n], b = pts[(i + 1) % n], rr = Array.isArray(r) ? r[i] : r;
+    const da = Math.hypot(a[0] - p[0], a[1] - p[1]), db = Math.hypot(b[0] - p[0], b[1] - p[1]), k1 = Math.min(rr, da / 2) / da, k2 = Math.min(rr, db / 2) / db;
+    d += (i ? 'L' : 'M') + (p[0] + (a[0] - p[0]) * k1) + ',' + (p[1] + (a[1] - p[1]) * k1) + 'Q' + p[0] + ',' + p[1] + ' ' + (p[0] + (b[0] - p[0]) * k2) + ',' + (p[1] + (b[1] - p[1]) * k2); }
+  return d + 'Z'; }
+const strokeD = (d, w) => ({ pts: sampleD(d, NM, false), w });
+const ray = (a, r1, r2, w, cx = 0, cy = 0) => { const c = Math.cos(a * deg), s = Math.sin(a * deg); return strokeD(`M${cx + r1 * c},${cy + r1 * s}L${cx + r2 * c},${cy + r2 * s}`, w); };
+const dotS = p => ({ pts: rep(p, NM), w: 0 });
+const hole = (pts, on = true) => ({ pts, on });
+const noHole = p => hole(rep(p, NH), false);
+const noShade = p => ({ pts: rep(p, NS), on: false });
+function trim(pts, f) { // keep the first fraction f of an open polyline
+  return pts.map((_, i) => { const u = i / (NM - 1) * f * (NM - 1), k = Math.min(NM - 2, Math.floor(u)), r = u - k; return [lerp(pts[k][0], pts[k + 1][0], r), lerp(pts[k][1], pts[k + 1][1], r)]; }); }
+
+// ---------------------------------------------------------------- icons (local px, origin = visual centre)
+const I = {};
+{ // CUP — one-radius mug (14 px corners) + ring handle; its hole is THE circle (r 22 px = pin eye = full stop)
+  const HR = 22 / 0.95, HC = [138, 30], HO = HR + 30, yj = Math.sqrt(HO * HO - (HC[0] - 105) ** 2), q = 14 / 0.95;
+  const body = S(`M ${-130 + q},-70 L ${105 - q},-70 Q 105,-70 105,${-70 + q} L 105,${HC[1] - yj} A ${HO},${HO} 0 1 1 105,${HC[1] + yj} L 105,${135 - q} Q 105,135 ${105 - q},135 L ${-130 + q},135 Q -130,135 -130,${135 - q} L -130,${-70 + q} Q -130,-70 ${-130 + q},-70 Z`);
+  const st = Array.from({ length: 8 }, () => dotS([-12, 30]));
+  st[7] = strokeD('M -75,-98 C -97,-128 -53,-150 -75,-182', 19); st[7].steam = 0;
+  st[0] = strokeD('M -12,-98 C -34,-133 10,-160 -12,-202', 19); st[0].steam = 1;
+  st[1] = strokeD('M 51,-98 C 29,-128 73,-150 51,-182', 19); st[1].steam = 2;
+  st[4] = strokeD('M -178,170 L 150,170', 19); st[4].saucer = true;
+  I.cup = { body, holes: [hole(circ(HC[0], HC[1], HR, NH))], strokes: st, shade: { pts: orient(sampleD(rpoly([[105, -70], [105, 135], [-8, 135]], [3, 3, 3]), NS)), on: true },
+    shadeC: mixC(C.ink, C.cream, 0.1), fill: C.ink, pos: [942, 548], scale: 0.95, piv: [0, 170] };
+}
+{ // SUN
+  const st = Array.from({ length: 8 }, (_, k) => ray(-90 + 45 * k, 165, 214, 18));
+  I.sun = { body: circ(0, 0, 125, NB), holes: [noHole([0, 0])], strokes: st, shade: noShade([0, 0]), fill: C.verm, pos: [960, 468], scale: 1, piv: [0, 0] };
+}
+{ // SUNSET — sun centre on the horizon (local y 40); 5 upper rays; 3 lower rays became reflection waves
+  const st = [];
+  const up = { 6: -168, 7: -129, 0: -90, 1: -51, 2: -12 };
+  for (const k in up) st[k] = ray(up[k], 192, 234, 18, 0, 40);
+  st[3] = strokeD('M -150,100 L 150,100', 18); st[4] = strokeD('M -100,140 L 100,140', 18); st[5] = strokeD('M -52,180 L 52,180', 18);
+  I.sunset = { body: circ(0, 40, 150, NB), holes: [noHole([0, 40])], strokes: st, shade: noShade([0, 40]), fill: C.mari, pos: [960, 520], scale: 1, piv: [0, 40] };
+}
+{ // GULL — two crescent wings whose upper edges are arcs of the SUN's own circle (r 125); flapping
+  const arcP = (a, b, R, n) => { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), h = Math.sqrt(Math.max(0, R * R - L * L / 4));
+    let nx = -dy / L, ny = dx / L; if (ny < 0) { nx = -nx; ny = -ny; }
+    const c = [mx + nx * h, my + ny * h], a0 = Math.atan2(a[1] - c[1], a[0] - c[0]); let da = Math.atan2(b[1] - c[1], b[0] - c[0]) - a0;
+    while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+    return Array.from({ length: n }, (_, i) => [c[0] + R * Math.cos(a0 + da * i / (n - 1)), c[1] + R * Math.sin(a0 + da * i / (n - 1))]); };
+  const gp = ty => { const TL = [-205, ty], TR = [205, ty];
+    return [...arcP(TL, [-13, 12], 125, 48), [0, 18], ...arcP([13, 12], TR, 125, 48), ...arcP(TR, [21, 40], 250, 48).slice(1),
+      ...Array.from({ length: 13 }, (_, i) => [21 * Math.cos(Math.PI * (i + 1) / 14), 40 + 21 * Math.sin(Math.PI * (i + 1) / 14)]), ...arcP([-21, 40], TL, 250, 48).slice(0, -1)]; };
+  const up = orient(resamplePoly(gp(-62), NB));
+  const dn = alignTo(up, orient(resamplePoly(gp(40), NB)));
+  I.gull = { body: up, down: dn, holes: [noHole([0, 20])], strokes: Array.from({ length: 8 }, () => dotS([0, 22])), shade: noShade([0, 20]), fill: C.cream, pos: [960, 424], scale: 1.02, piv: [0, 0] };
+}
+{ // PAPER PLANE — nose up-right (heading -35deg), keel facet
+  const N = [205, -125], L = [-205, 5], F = [-40, 45], K = [-5, 160], Q = [F[0] + 0.32 * (N[0] - F[0]), F[1] + 0.32 * (N[1] - F[1])];
+  const body = S(rpoly([N, L, F, K], [19, 19, 19, 19]));
+  const shade = orient(sampleD(rpoly([F, K, Q], [8, 19, 8]), NS));
+  I.plane = { body, holes: [noHole([0, 0])], strokes: Array.from({ length: 8 }, () => dotS([0, 10])), shade: { pts: shade, on: true },
+    fill: C.cream, shadeC: mixC(C.cream, C.ultra, 0.30), pos: [690, 642], scale: 0.74, rot0: 35 * deg, piv: [0, 0] };
+}
+{ // PIN — circle + rotated square (the heart's own construction), eye = THE circle (r 22 px), fold facet = the plane's facet
+  const R = 140, cy = -3, v = cy + R * Math.SQRT2, t = R / Math.SQRT2, q = 14 / 0.85 / Math.SQRT2;
+  const body = S(`M ${-q},${v - q} L ${-t},${cy + t} A ${R},${R} 0 1 1 ${t},${cy + t} L ${q},${v - q} Q 0,${v} ${-q},${v - q} Z`);
+  const shade = orient(sampleD(rpoly([[0, v + 4], [t + 2, cy + t], [0, cy]], [2, 2, 2]), NS));
+  I.pin = { body, holes: [hole(circ(0, cy, 22 / 0.85, NH))], strokes: Array.from({ length: 8 }, () => dotS([0, cy])), shade: { pts: shade, on: true }, shadeC: '#D93A1C',
+    fill: C.verm, pos: [960, 480], scale: 0.85, piv: [0, 190] };
+}
+{ // HEART — two circles on the upper sides of a rotated square (primitive logic), 14 px tip
+  const a = 234, h = a / Math.SQRT2, rc = a / 2, yc = 6, q = 14 / 0.86 / Math.SQRT2;
+  const body = S(`M ${-q},${yc + h - q} L ${-h},${yc} A ${rc},${rc} 0 0 1 0,${yc - h} A ${rc},${rc} 0 0 1 ${h},${yc} L ${q},${yc + h - q} Q 0,${yc + h} ${-q},${yc + h - q} Z`);
+  I.heart = { body, holes: [noHole([0, 0])], strokes: Array.from({ length: 8 }, () => dotS([0, 0])), shade: { pts: orient(sampleD(rpoly([[0, yc + h + 4], [h + 2, yc], [0, yc]], [2, 2, 2]), NS)), on: true },
+    shadeC: mixC(C.cream, C.verm, 0.15), fill: C.cream, pos: [960, 522], scale: 0.86, piv: [0, 0] };
+}
+
+// ---------------------------------------------------------------- wordmark (real Outfit SemiBold outlines)
+const WM = (() => {
+  const FS = 250, s = FS / GL.upm, track = -5, yB = 566, word = 'morphe';
+  const advs = [...word].map(ch => GL.glyphs[ch].adv * s);
+  const dotR = 22, dotGap = 9;
+  const total = advs.reduce((a, b) => a + b, 0) + track * (word.length - 1) + dotGap + 2 * dotR;
+  let x = 960 - total / 2; const letters = [];
+  [...word].forEach((ch, k) => {
+    const g = GL.glyphs[ch]; const cs = g.contours.map(c => c.map(([gx, gy]) => [x + gx * s, yB - gy * s]));
+    let oi = 0; g.areas.forEach((a, i) => { if (Math.abs(a) > Math.abs(g.areas[oi])) oi = i; });
+    const outer = orient(resamplePoly(cs[oi], k === 0 ? NB : 200));
+    const holes = cs.filter((_, i) => i !== oi).map(c => orient(resamplePoly(c, NH)));
+    const cen = centroid(outer), ar = Math.abs(area(outer));
+    letters.push({ ch, outer, holes, cen, r: Math.sqrt(ar / Math.PI) * 0.82, right: x + advs[k] });
+    x += advs[k] + track;
+  });
+  const e = letters[letters.length - 1];
+  const dot = { cen: [e.right + dotGap + dotR - track, yB - dotR], r: dotR };
+  return { letters, dot, yB, FS };
+})();
+{ const m = WM.letters[0];
+  I.m = { body: m.outer.map(p => [p[0] - m.cen[0], p[1] - m.cen[1]]), holes: [noHole([0, 0])], strokes: Array.from({ length: 8 }, () => dotS([0, 0])), shade: noShade([0, 0]),
+    fill: C.cream, pos: m.cen, scale: 1, piv: [0, WM.yB - m.cen[1]] }; }
+
+// ---------------------------------------------------------------- v5 title 形变动画 (real ResourceHanRounded Heavy outlines = morph targets)
+// heart -> circle (8.30, at the title centre) -> the circle divides into four cells + the full stop -> each cell blooms into its character
+let TV = null;
+// v5.1 glyphs: 形变动画 constructed from the film's vocabulary: round-cap bars of ONE width (the icons' strokes), arcs for the
+// falling strokes, true discs for the dots (the full stop's size), 画's 田 as one disc quartered (the four cells). Design px in a
+// 240 box, y down; returned in the old font-JSON shape (upm 240, y up) so the bloom build below is unchanged.
+function buildGV51() {
+  const w = 32, hw = w / 2, BASE = 218;
+  const L2 = (x0, y0, x1, y1) => [[x0, y0], [x1, y1]];
+  const arcC = (cx, cy, R, a0, a1, n = 40) => Array.from({ length: n }, (_, i) => { const a = (a0 + (a1 - a0) * i / (n - 1)) * deg; return [cx + R * Math.cos(a), cy + R * Math.sin(a)]; });
+  const arc3 = (p0, p1, sg, n = 40) => {   // arc p0 -> p1 with sagitta sg (+ = bulges to the right of the travel direction on screen)
+    const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2, dx = p1[0] - p0[0], dy = p1[1] - p0[1], c = Math.hypot(dx, dy), nx = -dy / c, ny = dx / c;
+    return Array.from({ length: n }, (_, i) => { const u = i / (n - 1), b = 4 * sg * u * (1 - u);   // parabola ~ arc for small sagitta
+      return [p0[0] + dx * u + nx * b, p0[1] + dy * u + ny * b]; }); };
+  const stroke = (...segs) => {   // centreline (tangent-continuous segments) -> closed outline with round caps
+    const P = []; for (const sg of segs) for (const p of sg) { const q = P[P.length - 1]; if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) P.push(p); }
+    const n = P.length, Lf = [], Rt = [], tan = i => { const a = P[Math.max(0, i - 1)], b = P[Math.min(n - 1, i + 1)], d = Math.hypot(b[0] - a[0], b[1] - a[1]); return [(b[0] - a[0]) / d, (b[1] - a[1]) / d]; };
+    for (let i = 0; i < n; i++) { const [tx, ty] = tan(i); Lf.push([P[i][0] - ty * hw, P[i][1] + tx * hw]); Rt.push([P[i][0] + ty * hw, P[i][1] - tx * hw]); }
+    const cap = (c, t, a0, a1) => { const th = Math.atan2(t[1], t[0]), o = []; for (let j = 1; j < 16; j++) { const a = th + (a0 + (a1 - a0) * j / 16) * deg; o.push([c[0] + hw * Math.cos(a), c[1] + hw * Math.sin(a)]); } return o; };
+    return [...Lf, ...cap(P[n - 1], tan(n - 1), 90, -90), ...Rt.reverse(), ...cap(P[0], tan(0), -90, -270)]; };
+  const bar = (...a) => stroke(L2(...a));
+  const disc = (cx, cy, r) => circ(cx, cy, r, 96);
+  const quarters = (cx, cy, R, g) => [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([sx, sy]) => {   // a disc cut into four by a cross of width g
+    const h = g / 2, e = Math.sqrt(R * R - h * h), aY = Math.atan2(sy * h, sx * e), aX = Math.atan2(sy * e, sx * h); let da = aX - aY;
+    while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+    return [[cx + sx * h, cy + sy * h], ...Array.from({ length: 33 }, (_, i) => [cx + R * Math.cos(aY + da * i / 32), cy + R * Math.sin(aY + da * i / 32)])]; });
+  const G = {
+    '形': [bar(26, 40, 124, 40), bar(16, 118, 128, 118), stroke(L2(58, 40, 58, 146), arcC(58 - 84, 146, 84, 0, 60)), bar(110, 40, 110, 222),
+           stroke(arc3([212, 26], [160, 72], -6)), stroke(arc3([218, 94], [158, 146], -6)), stroke(arc3([224, 160], [150, 220], -7))],
+    '变': [disc(120, 18, 19), bar(22, 58, 218, 58), bar(98, 58, 98, 102), bar(142, 58, 142, 102), disc(50, 104, 17), disc(190, 104, 17),
+           bar(58, 150, 178, 150), stroke(arc3([178, 150], [38, 224], -14)), stroke(arc3([86, 172], [210, 224], 10))],
+    '动': [bar(26, 46, 92, 46), bar(16, 104, 100, 104), bar(58, 104, 26, 208), bar(26, 208, 92, 194), disc(88, 150, 18),
+           bar(136, 78, 220, 78), stroke(L2(220, 78, 220, 190), arcC(190, 190, 30, 0, 90)), stroke(L2(176, 16, 176, 120), arcC(176 - 110, 120, 110, 0, 50))],
+    '画': [bar(20, 16, 220, 16), bar(22, 100, 22, 222), bar(22, 222, 218, 222), bar(218, 100, 218, 222), ...quarters(120, 124, 60, 11)],
+  };
+  const glyphs = {};
+  for (const ch in G) { const comps = G[ch].map(pts => ({ outer: pts.map(([x, y]) => [x, BASE - y]), holes: [] }));
+    const xs = comps.flatMap(c => c.outer.map(p => p[0])), ys = comps.flatMap(c => c.outer.map(p => p[1]));
+    glyphs[ch] = { adv: 240, bbox: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], comps }; }
+  return { upm: 240, glyphs };
+}
+if (V5) {
+  const GV = buildGV51();
+  const F = 240, s = F / GV.upm, track = 8, dotR = 22, gap = 14, chars = [...'形变动画'], CY = 487, XS = -7;   // XS, CY: keep the full stop where v5.0 had it
+  const top = Math.max(...chars.map(c => GV.glyphs[c].bbox[3])), bot = Math.min(...chars.map(c => GV.glyphs[c].bbox[1]));
+  const g0 = GV.glyphs[chars[0]], g3 = GV.glyphs[chars[3]], adv = F + track;
+  const inkW = 3 * adv + (g3.bbox[2] - g0.bbox[0]) * s, blockW = inkW + gap + 2 * dotR;
+  const X0 = 960 + XS - blockW / 2 - g0.bbox[0] * s, yB = CY + (top + bot) / 2 * s;
+  const perim = P => { let L = 0; for (let i = 0; i < P.length; i++) L += Math.hypot(P[(i + 1) % P.length][0] - P[i][0], P[(i + 1) % P.length][1] - P[i][1]); return L; };
+  const rc = 96;   // radius of each character's cell (the bridge circle)
+  const items = chars.map((ch, k) => {
+    const g = GV.glyphs[ch], xo = X0 + k * adv, tr = c => c.map(([gx, gy]) => [xo + gx * s, yB - gy * s]);
+    const cen = [xo + (g.bbox[0] + g.bbox[2]) / 2 * s, yB - (g.bbox[1] + g.bbox[3]) / 2 * s];
+    const comps = g.comps.map((c, j) => {
+      const raw = tr(c.outer), n = Math.max(160, Math.round(perim(raw) / 2.4)), outer = orient(resamplePoly(raw, n));
+      const holes = c.holes.map(h => { const hr = tr(h); return { raw: hr, pts: orient(resamplePoly(hr, Math.max(48, Math.round(perim(hr) / 2.4)))) }; });
+      const circle = alignTo(outer, circ(0, 0, rc, n));   // unit cell (relative to the cell centre), first vertex aligned to the outline
+      return { raw, outer, holes, circle, j };
+    }).sort((a, b) => Math.abs(area(b.outer)) - Math.abs(area(a.outer)));   // biggest part first: small strokes pinch off last
+    return { ch, k, cen, comps };
+  });
+  const inkX0 = X0 + g0.bbox[0] * s, inkX1 = X0 + 3 * adv + g3.bbox[2] * s;
+  TV = { F, s, yB, items, rc, t0: 8.30, split: 0.12, m0: 8.38, st: 0.025, cst: 0.006, md: 0.20, box: [inkX0, yB - top * s, inkX1, yB - bot * s],
+    stop: [inkX1 + gap + dotR, yB - g3.bbox[1] * s - dotR], stopR: dotR };
+  TV.done = TV.m0 + 3 * TV.st + (Math.max(...items.map(it => it.comps.length)) - 1) * TV.cst + TV.md;   // every stroke formed
+  WM.dot.cen = TV.stop; WM.dot.r = dotR;   // the end-card machinery (chapter dots, lub-dub rings) now targets the title's full stop
+  TV.CY = CY;
+}
+
+// ---------------------------------------------------------------- icon "life" (pure in t)
+function state(name, t) {
+  const ic = I[name];
+  if (name === 'cup') {
+    const strokes = ic.strokes.map((s, k) => {
+      if (s.steam !== undefined) { const j = s.steam, ph = j * 1.9, ta = 0.40 + [0.02, 0, 0.04][j], tb = ta + 0.2, base = s.pts[0];
+        if (t < tb) { if (t < ta) return { pts: rep(base, NM), w: 0 };   // crown droplet flung from the contact point, lands on the rim
+          const e = EIO((t - ta) / (tb - ta)), S0 = [[-150, 118], [128, 110], [160, 124]][j], Cc = [[-205, -330], [70, -420], [175, -300]][j];
+          const hd = lerp(0.05, 1, e); return { pts: Array.from({ length: NM }, (_, i) => qbez(S0, Cc, base, Math.max(0, hd - 0.05 * (1 - i / (NM - 1))))), w: lerp(26, 17, e) }; }
+        const f = smooth(tb, tb + 0.42, t);
+        const pts = trim(s.pts, Math.max(0.001, f)).map((p, i) => { const u = i / (NM - 1) * f; return [p[0] + 10 * u * Math.sin(u * 5 - t * 16 + ph), p[1] - 7 * u * Math.sin(t * 6.8 + ph)]; });
+        return { pts, w: lerp(17, s.w, clamp(f * 3)) }; }
+      if (s.saucer) { const f = EO(clamp((t - 0.37) / 0.3)); return { pts: s.pts.map(p => [lerp(-12, p[0], f), p[1]]), w: s.w * clamp(f * 3) }; }
+      return s; });
+    const hf = smooth(0.5, 0.66, t); const hc = [138, 30];
+    return { ...ic, strokes, holes: [hole(lerpP(rep(hc, NH), ic.holes[0].pts, hf))] };
+  }
+  if (name === 'sun') { const nb = clamp((t - 1.98) / 0.4, 0, 2.2), a = 12 * (Math.floor(nb) + EO(clamp((nb % 1) / 0.45))) * deg, c = Math.cos(a), s = Math.sin(a), push = 1 + 0.075 * Math.sin(Math.PI * clamp((t - 1.97) / 0.34));
+    return { ...ic, strokes: ic.strokes.map(st => ({ w: st.w, pts: st.pts.map(p => [(p[0] * c - p[1] * s) * push, (p[0] * s + p[1] * c) * push]) })) }; }
+  if (name === 'sunset') return { ...ic, strokes: ic.strokes.map((st, k) => k >= 3 && k <= 5 ? { w: st.w, pts: st.pts.map(p => [p[0] * (1 + 0.05 * Math.sin(t * 6.3 + k * 2.1)) + (k % 2 ? 9 : -9) * Math.cos(Math.PI * (t - 3.2) / 0.4), p[1]]) } : st) };
+  if (name === 'gull') { const f = 0.5 - 0.5 * Math.cos(2 * Math.PI * (t - 4.2) / 0.2); return { ...ic, body: lerpP(ic.body, ic.down, f) }; }
+  return ic;
+}
+
+// ---------------------------------------------------------------- morph table
+const MP = {
+  'cup>sun':      { via: [0, 18, 116], rot: 24, ctrl: [70, -10], sq: 0.13 },
+  'sun>sunset':   { rot: 0, ctrl: [0, 0], sq: 0.05 },
+  'sunset>gull':  { via: [0, 30, 118], rot: -18, ctrl: [-60, 10], sq: 0.12 },
+  'gull>plane':   { via: [0, 10, 98], rot: -26, ctrl: [110, -70], sq: 0.14 },
+  'plane>pin':    { via: [0, 5, 100] },
+  'pin>heart':    { via: [0, -12, 120], rot: 18, ctrl: [0, -190], sq: 0.13, sw: [0.49, 0.51] },
+  'heart>m':      { via: [0, -6, 112], rot: -20, ctrl: [40, -70], sq: 0.12 },
+};
+for (const m of cues.morphs) {
+  const key = m.a + '>' + m.b, P = MP[key]; if (!P) continue; m.key = key; m.P = P;
+  const A = I[m.a].body, B = I[m.b].body;
+  if (P.via) { const c = circ(P.via[0], P.via[1], P.via[2], NB); P.Ca = alignTo(A, c); P.Cb = alignTo(B, c); }
+  else P.sAB = bestShift(A, B);
+}
+const drop = cues.morphs[0];
+drop.Ca = alignTo(I.cup.body, circ(-12, 30, 105, NB));
+if (V5) {   // v5: the heart travels to the title centre while it becomes the circle (u 0.5 = 8.30), with almost no stretch left at the circle
+  const A = I.heart.pos, tgt = [960, TV.CY - 6], mp = MP['heart>m'];
+  mp.ctrl = [0, -60]; mp.sq = 0.035; mp.rot = -14;
+  I.m.fill = C.ink; mp.sw = [0.04, 0.20];   // v5.1 figure-ground swap: the cream heart turns ink (8.02-8.12) while the cream paper spills out from under it
+  I.m.pos = [2 * tgt[0] - A[0] - mp.ctrl[0], 2 * tgt[1] - A[1] - mp.ctrl[1]];
+}
+
+// ---------------------------------------------------------------- flight path
+const LP = cues.loop;
+const FP = (() => { const { cx, cy, r, ground: g } = LP, x0 = I.plane.pos[0];
+  const d = `M ${x0},${g} L ${cx},${g} A ${r},${r} 0 0 0 ${cx + r},${cy} A ${r},${r} 0 0 0 ${cx},${cy - r} A ${r},${r} 0 0 0 ${cx - r},${cy} L ${I.pin.pos[0]},${I.pin.pos[1]}`;
+  const n = 1200, pts = sampleD(d, n, false); const len = (cx - x0) + 1.5 * Math.PI * r + (I.pin.pos[1] - cy);
+  return { pts, n, len, uTop: ((cx - x0) + Math.PI * r) / len }; })();
+function pathAt(u) { const x = clamp(u) * (FP.n - 1), k = Math.min(FP.n - 2, Math.floor(x)), r = x - k, a = FP.pts[k], b = FP.pts[k + 1];
+  const k0 = Math.max(0, k - 2), k1 = Math.min(FP.n - 1, k + 3); const ang = Math.atan2(FP.pts[k1][1] - FP.pts[k0][1], FP.pts[k1][0] - FP.pts[k0][0]);
+  return { p: [lerp(a[0], b[0], r), lerp(a[1], b[1], r)], ang }; }
+const FL = cues.flight;
+const ECL = bez(0.32, 0, 0.1, 1);   // launch: quick acceleration, long deceleration up to the stall at the top
+function flightU(t) { if (t <= FL.launch) return 0; const u0 = FP.uTop - 6 / FP.len;
+  if (t < FL.apex + 0.03) return u0 * ECL((t - FL.launch) / (FL.apex + 0.03 - FL.launch));
+  if (t < FL.dive) return u0 + (8 / FP.len) * smooth(FL.apex + 0.03, FL.dive + 0.05, t);      // the hang: upside down at the top
+  const ud = u0 + (8 / FP.len) * smooth(FL.apex + 0.03, FL.dive + 0.05, FL.dive);
+  return Math.min(1, ud + (1 - ud) * Math.pow(clamp((t - FL.dive) / (FL.t1 - FL.dive)), 1.65)); }
+
+// ---------------------------------------------------------------- impacts / squash
+const IMP = [ { t: 0.4, A: 0.26, who: 'cup' }, { t: 2.0, A: 0.07, who: 'sun', uni: true }, { t: 3.2, A: 0.07, who: 'sunset' },
+  { t: 6.4, A: 0.24, who: 'pin' }, { t: 7.6, A: 0.14, who: 'heart' }, { t: 8.6, A: 0.1, who: 'm' } ];
+const ANT = { cup: 0.17, sunset: 0.1, gull: 0.12, heart: 0.12 };
+function impact(t, who) { let q = 0, uni = 0;
+  for (const im of IMP) { if (im.who !== who) continue; const τ = t - (im.t - 2 * FR); if (τ < 0 || τ > 1.2) continue;
+    const v = im.A * Math.sin(2 * Math.PI * τ / 0.28) * Math.exp(-τ * 7.5); if (im.uni) uni += v; else q += v; }
+  for (const m of cues.morphs) { const an = ANT[m.a]; if (!an || m.a !== who) continue; const τ = t - (m.t0 - 0.3);
+    if (τ > 0 && τ < 0.3) q += an * EIO(clamp(τ / 0.2)); else if (τ >= 0.3 && τ < 0.42) q += an * (1 - EO((τ - 0.3) / 0.12)) - 0.35 * an * Math.sin(Math.PI * (τ - 0.3) / 0.12); }
+  if (who === 'pin') { const τ = t - 6.86; if (τ > 0 && τ < 0.2) q += 0.12 * Math.sin(Math.PI * τ / 0.2); } // anticipation before the hop
+  if (who === 'heart') { for (const [tb, a] of [[cues.heartbeat[0], 0.09], [cues.heartbeat[1], 0.06]]) { const τ = t - tb + FR; if (τ > 0 && τ < 0.16) uni += a * Math.sin(Math.PI * τ / 0.16); } }
+  return { q, uni }; }
+
+// transform: local -> world.  impact squash about pivot (local axes), scale*rot, stretch along phi about origin, translate
+function makeM(pos, rot, sc, phi, k, q, piv) {
+  const c = Math.cos(rot), s = Math.sin(rot);
+  const R = [c * sc, -s * sc, s * sc, c * sc];
+  const D = [1 + q, 0, 0, 1 - q];
+  const cp = Math.cos(phi), sp = Math.sin(phi), ik = 1 / k;
+  const Q = [cp * cp * k + sp * sp * ik, cp * sp * (k - ik), cp * sp * (k - ik), sp * sp * k + cp * cp * ik];
+  const mul = (a, b) => [a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3], a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3]];
+  const QR = mul(Q, R), A = mul(QR, D);
+  const dp = [piv[0] - (D[0] * piv[0]), piv[1] - (D[3] * piv[1])];
+  return { A, b: [pos[0] + QR[0] * dp[0] + QR[1] * dp[1], pos[1] + QR[2] * dp[0] + QR[3] * dp[1]] };
+}
+const qbez = (a, c, b, t) => [lerp(lerp(a[0], c[0], t), lerp(c[0], b[0], t), t), lerp(lerp(a[1], c[1], t), lerp(c[1], b[1], t), t)];
+function heroClip(t) { if (t <= 2.3 || t >= 4.45) return null; return seaSurface(t) + 300 * EIO(clamp((t - 3.84) / 0.13)); }  // the sun breaks the surface 2 f before the circle
+function seaSurface(t) { if (t < cues.wipes.sea) return H + 10; return lerp(H + 10, 560, EO(clamp((t - cues.wipes.sea) / 0.5))); }
+
+function blendParts(A, B, u, P) {   // u = linear time fraction of the morph
+  let body, holes, strokes, shade;
+  const via = P && P.Ca, gA = EM(clamp(u / 0.5)), gB = EM(clamp((u - 0.5) / 0.5)), g = EM(u);
+  if (via) body = u < 0.5 ? lerpP(A.body, P.Ca, gA) : lerpP(P.Cb, B.body, gB);
+  else body = lerpP(A.body, shiftP(B.body, P ? P.sAB : 0), g);
+  const hA = A.holes[0], hB = B.holes[0];
+  if (hA.on && hB.on && !via) holes = [hole(lerpP(hA.pts, hB.pts, g))];
+  else holes = [u < 0.5 ? hole(lerpP(hA.pts, rep(centroid(hA.pts), NH), clamp(gA / 0.6))) : hole(lerpP(rep(centroid(hB.pts), NH), hB.pts, clamp((gB - 0.4) / 0.6)))];
+  strokes = A.strokes.map((sa, k) => { const sb = B.strokes[k], o = [7, 0, 1, 2, 6, 3, 5, 4].indexOf(k) * 0.03, gk = EIO(clamp((u - 0.06 - o) / 0.7));
+    const dies = sb.w === 0 && sa.w > 0, wk = dies ? 1 - smooth(0.2, 0.48, u) : 1;   // strokes with no B slot shrink + fade in place before the circle
+    let pts = dies ? (() => { const md = sa.pts[NM >> 1], f = 1 - 0.7 * smooth(0.05, 0.48, u); return sa.pts.map(p => [lerp(md[0], p[0], f), lerp(md[1], p[1], f)]); })() : lerpP(sa.pts, sb.pts, gk);
+    if (via && P.via && !dies) { const s = Math.sin(Math.PI * clamp(u)) * (dies ? 1 - smooth(0.4, 0.55, u) : 1), cx = P.via[0], cy = P.via[1], Rm = (P.via[2] + lerp(sa.w, sb.w, gk) / 2 + 18) * Math.min(1, 1.6 * s);
+      const mid = pts[NM >> 1], sh = 1 - 0.55 * s; pts = pts.map(p => { let q = [lerp(mid[0], p[0], sh), lerp(mid[1], p[1], sh)]; const dx = q[0] - cx, dy = q[1] - cy, d = Math.hypot(dx, dy) || 1;
+        return d < Rm ? [cx + dx / d * Rm, cy + dy / d * Rm] : q; }); }
+    return { pts, w: lerp(sa.w, sb.w, gk) * wk }; });
+  const sA = A.shade, sB = B.shade;
+  shade = u < 0.5 ? { pts: lerpP(sA.pts, rep(centroid(sA.pts), NS), clamp(gA / 0.5)), on: sA.on } : { pts: lerpP(rep(centroid(sB.pts), NS), sB.pts, clamp((gB - 0.5) / 0.5)), on: sB.on };
+  return { body, holes, strokes, shade };
+}
+
+function heroAt(t) {
+  const L = cues.land;
+  // ---- intro: falling drop -> mug
+  if (t < drop.t1) {
+    const ic = I.cup, st = state('cup', t), tl = L.cup;
+    const body = t < 0.36 ? drop.Ca : lerpP(drop.Ca, st.body, EM((t - 0.36) / 0.26));
+    const tt = Math.min(t, tl), y = ic.pos[1] - 700 * tl - 1600 * tl * tl + 700 * tt + 1600 * tt * tt;   // gravity, lands at tl
+    const k = 1 + 0.35 * (1 - smooth(tl - 2 * FR, tl + FR, t));
+    const im = impact(t, 'cup');
+    return { ...st, body, fill: C.ink, strokeC: C.ink, shadeC: ic.shadeC, shade: { pts: lerpP(rep(centroid(st.shade.pts), NS), st.shade.pts, EM(clamp((t - 0.36) / 0.26))), on: t > 0.4 }, M: makeM([ic.pos[0], y], 0, ic.scale, Math.PI / 2, k, im.q, [0, 135]) };
+  }
+  // ---- flight 5.6 -> 6.4 (plane, then plane -> capsule -> pin in the dive)
+  if (t >= FL.t0 && t < FL.t1) {
+    const u = flightU(t), pa = pathAt(u), u2 = flightU(t + 0.004), pb = pathAt(u2);
+    const speed = Math.hypot(pb.p[0] - pa.p[0], pb.p[1] - pa.p[1]) / 0.004;
+    const m = cues.morphs.find(x => x.key === 'plane>pin'); const mu = clamp((t - m.t0) / (m.t1 - m.t0)), g = EM(mu);
+    const A = state('plane', t), B = state('pin', t);
+    const parts = t < m.t0 ? A : blendParts(A, B, mu, m.P);
+    const rot = mu < 0.5 ? pa.ang + 35 * deg : pa.ang - 90 * deg;
+    // anticipation: pull back + squash along the heading (6 f), hold 3 f, release on the beat
+    const ant = t < FL.launch ? EIO(clamp((t - FL.t0 - 0.02) / 0.2)) : 1 - EO(clamp((t - FL.launch) / 0.1));
+    const hang = Math.sin(Math.PI * clamp((t - FL.apex + 0.01) / 0.15));        // the stall at the top: squash
+    const k = 1 - 0.16 * ant + 0.13 * clamp(speed / 2600) - 0.1 * hang + 0.08 * Math.sin(Math.PI * g);
+    const pos = [pa.p[0] - 34 * ant * (t < FL.launch ? 1 : 0.6), pa.p[1]];
+    const im = impact(t, 'pin');
+    return { ...parts, fill: C.cream, sweep: { to: C.verm, p: clamp(clamp((qT(t) - m.t0) / (m.t1 - m.t0)) / 0.45), dir: pa.ang }, strokeC: C.cream, shadeC: mu < 0.5 ? I.plane.shadeC : I.pin.shadeC,
+      M: makeM(pos, rot, lerp(I.plane.scale, I.pin.scale, g), pa.ang, k, mu > 0.5 ? im.q : 0, [0, 190]) };
+  }
+  // ---- morphs
+  const m = cues.morphs.find(x => x.P && x.key !== 'plane>pin' && t >= x.t0 && t < x.t1);
+  if (m) {
+    const u = clamp((t - m.t0) / (m.t1 - m.t0)), g = EM(u), A = state(m.a, t), B = state(m.b, t), IA = I[m.a], IB = I[m.b], P = m.P;
+    const parts = blendParts(A, B, u, P);
+    const ctrl = [(IA.pos[0] + IB.pos[0]) / 2 + P.ctrl[0], (IA.pos[1] + IB.pos[1]) / 2 + P.ctrl[1]];
+    const pos = qbez(IA.pos, ctrl, IB.pos, g), p2 = qbez(IA.pos, ctrl, IB.pos, Math.min(1, g + 0.02)), p1 = qbez(IA.pos, ctrl, IB.pos, Math.max(0, g - 0.02));
+    const phi = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) > 0.5 ? Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) : Math.PI / 2;
+    const k = 1 + P.sq * Math.sin(Math.PI * g);
+    const imB = impact(t, m.b), imA = impact(t, m.a), fc = smooth(0.4, 0.6, u);
+    const im = u > 0.5 ? imB : imA, piv = u > 0.5 ? IB.piv : IA.piv;
+    const swp = IA.fill !== IB.fill ? clamp((clamp((qT(t) - m.t0) / (m.t1 - m.t0)) - (P.sw ? P.sw[0] : 0.08)) / (P.sw ? P.sw[1] - P.sw[0] : 0.37)) : 0;
+    if (V5 && m.key === 'heart>m' && swp > 0) parts.shade = { ...parts.shade, on: false };   // v5.1: the facet fades to cream, then goes with the ink wipe
+    return { ...parts, fill: IA.fill, sweep: IA.fill !== IB.fill ? { to: IB.fill, p: swp, dir: phi } : null, strokeC: mixC(IA.fill, IB.fill, smooth(0.47, 0.53, u)),
+      shadeC: V5 && m.key === 'heart>m' ? mixC(IA.shadeC, IA.fill, smooth(0, 0.04, u)) : u < 0.5 ? (IA.shadeC || IB.shadeC) : (IB.shadeC || IA.shadeC),
+      clipY: heroClip(t),
+      M: makeM(pos, lerp(IA.rot0 || 0, IB.rot0 || 0, g) + P.rot * deg * Math.sin(Math.PI * g), lerp(IA.scale, IB.scale, g) * (1 + im.uni), phi, k, im.q, piv) };
+  }
+  // ---- holds
+  const order = ['cup', 'sun', 'sunset', 'gull', 'plane', 'pin', 'heart', 'm'];
+  let cur = 'cup'; for (const n of order) if (t >= L[n]) cur = n;
+  const ic = I[cur], st = state(cur, t), im = impact(t, cur);
+  let pos = ic.pos;
+  if (cur === 'gull') pos = [pos[0], pos[1] - 10 * Math.sin(2 * Math.PI * (t - 4.2) / 0.4)];
+  let rot = 0;
+  if (cur === 'pin') { const τ = t - L.pin; rot = 6 * deg * Math.sin(2 * Math.PI * τ / 0.42) * Math.exp(-τ * 3.2) * smooth(0, 0.06, τ);   // the stake wobbles about its tip
+    const pv = ic.piv, c = Math.cos(rot), s = Math.sin(rot); pos = [pos[0] + ic.scale * (pv[0] - (c * pv[0] - s * pv[1])), pos[1] + ic.scale * (pv[1] - (s * pv[0] + c * pv[1]))]; }
+  // holds breathe with the music: a small kick-like swell on every quarter note (arp accents), none on the logo
+  const bq = ((t % 0.4) + 0.4) % 0.4, pulse = t < 8.0 ? 0.02 * Math.exp(-bq * 11) * (1 - Math.exp(-bq * 60)) * 1.25 : 0;
+  return { ...st, fill: ic.fill, strokeC: ic.fill, shadeC: ic.shadeC, clipY: heroClip(t),
+    M: makeM(pos, rot, ic.scale * (1 + im.uni + pulse), Math.PI / 2, 1, im.q, ic.piv) };
+}
+
+// ---------------------------------------------------------------- fields (colour-block wipes) + per-field decor
+const WP = cues.wipes;
+const _org = {}; const org = k => _org[k] || (_org[k] = heroAt(WP[k]).M.b.slice());
+const FEATHER = 0.4 * 0.5 / FPS;   // analytic motion blur for moving field edges: radial speed x shutter (x0.7, the harness samples add the rest)
+const farR = o => Math.max(...[[-160, -160], [W + 160, -160], [-160, H + 160], [W + 160, H + 160]].map(c => Math.hypot(c[0] - o[0], c[1] - o[1])));
+function circleReg(t, t0, t1, o, r0 = 40, ease = EB) { if (t < t0) return null; if (t >= t1) return 'full';
+  const rmax = farR(o), rr = x => lerp(r0, rmax, ease(clamp((x - t0) / (t1 - t0))));
+  return { circle: [o[0], o[1], rr(t)], fw: Math.min(60, Math.abs(rr(t + 0.004) - rr(t - 0.004)) / 0.008 * FEATHER) }; }
+function shockReg(t) { const t0 = cues.shock, T = 0.55, tc = 0.045; if (t < t0) return null; if (t >= t0 + T) return 'full';   // 14 px contact ring 1 f early, ~52 % radius ON the hit
+  const o = [960, LP.ground], rmax = farR(o), rr = x => { const τ = clamp(x - t0, 0, T); return lerp(14, rmax, (1 - Math.exp(-τ / tc)) / (1 - Math.exp(-T / tc))); };
+  return { circle: [o[0], o[1], rr(t)], fw: Math.min(60, Math.abs(rr(t + 0.003) - rr(Math.max(t0, t - 0.003))) / (t + 0.003 - Math.max(t0, t - 0.003)) * FEATHER) }; }
+function seaTop(t) { if (t < WP.flood) return seaSurface(t); return lerp(560, -80, EIO(clamp((t - WP.flood) / 0.42))); }
+const fields = [
+  { c: C.cream, ink: C.ink, reg: () => 'full' },
+  { c: C.mari, ink: C.ink, reg: t => circleReg(t, WP.sun, WP.sun + 0.6, org('sun'), 50) },
+  { c: C.verm, ink: C.cream, reg: t => circleReg(t, WP.sky, WP.sky + 0.6, org('sky'), 110) },
+  { c: C.ultra, ink: C.cream, reg: t => { const y = seaTop(t); if (y >= H + 60) return null; if (y <= -60) return 'full';
+      return { rect: [-400, y, W + 800, H - y + 400], fw: Math.min(60, Math.abs(seaTop(t + 0.004) - seaTop(t - 0.004)) / 0.008 * FEATHER) }; } },
+  { c: C.cream, ink: C.ink, reg: shockReg },
+  { c: C.verm, ink: C.cream, reg: t => circleReg(t, WP.heart, WP.heart + 0.55, org('heart'), 98) },
+  V5 ? { c: C.cream, ink: C.ink, reg: t => circleReg(t, WP.ink, WP.ink + 0.28, org('ink'), 60) }   // v5.1: the end is on the cream paper (full frame by 8.30)
+     : { c: C.ink, ink: C.cream, reg: t => circleReg(t, WP.ink, WP.ink + 0.6, org('ink'), 60) },
+];
+const WORDS = ['早安', '日出', '日落', '海风', '远行', '抵达', '心动'];
+const EN = ['GOOD MORNING', 'SUNRISE', 'SUNSET', 'SEA BREEZE', 'TAKE OFF', 'ARRIVAL', 'LOVE'];
+function drawUI(ink, t) {
+  const a = 1 - smooth(8.0, 8.3, t); if (a <= 0) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = ink; ctx.strokeStyle = ink; ctx.textBaseline = 'alphabetic';
+  const tc = cues.captions; let i = 0; for (let k = 0; k < tc.length; k++) if (t >= tc[k]) i = k;
+  const p = i === 0 ? clamp((t - 0.05) / 0.36) : clamp((t - tc[i]) / 0.36), e = EM(p);
+  const x = 96, y = 1002;
+  ctx.save(); ctx.beginPath(); ctx.rect(x - 6, y - 44, 720, 58); ctx.clip();
+  const draw = (k, dy, al) => { if (al <= 0.001) return; ctx.globalAlpha = a * al;
+    ctx.font = '500 19px "IBM Plex Mono"'; ctx.letterSpacing = '1px'; ctx.fillText(String(k + 1).padStart(2, '0'), x, y + dy - 3);
+    ctx.globalAlpha = a * al * 0.45; ctx.fillText('/07', x + 26, y + dy - 3); ctx.globalAlpha = a * al;
+    ctx.font = '500 34px "HarmonyOS Sans SC"'; ctx.letterSpacing = '4px'; ctx.fillText(WORDS[k], x + 104, y + dy);
+    const w = ctx.measureText(WORDS[k]).width; ctx.font = '500 14px "IBM Plex Mono"'; ctx.letterSpacing = '2.5px'; ctx.globalAlpha = a * al * 0.6; ctx.fillText(EN[k], x + 104 + w + 16, y + dy - 3); };
+  if (i === 0) draw(0, 46 * (1 - e), e); else if (p < 1) { draw(i - 1, -46 * e, 1 - e); draw(i, 46 * (1 - e), e); } else draw(i, 0, 1);
+  ctx.restore();
+  // progress: 7 dots, the active one stretches into a capsule
+  if (t < 8.0) { const act = (i === 0 ? 0 : i - 1 + e); ctx.globalAlpha = a; ctx.lineCap = 'round';
+  let xr = W - 96; const yd = y - 11;
+  for (let k = 6; k >= 0; k--) { const wgt = Math.max(0, 1 - Math.abs(k - act)), len = 22 * EM(wgt), r = 4.5;
+    ctx.globalAlpha = a * (0.3 + 0.7 * wgt); ctx.beginPath(); ctx.arc(xr - len, yd, r, Math.PI / 2, 3 * Math.PI / 2); ctx.arc(xr, yd, r, -Math.PI / 2, Math.PI / 2); ctx.closePath(); ctx.fill(); xr -= len + 20; } }
+  ctx.restore();
+}
+function drawDecor(ink, t) {
+  // dashed route of the plane
+  const tqc = qT(t), T1c = 6.4 + 4 * FR, band = tqc > 6.4 + 2 * FR - 1e-4 && tqc - SH / 2 < T1c - 1e-6;   // collapse frames 194-196
+  if (t >= FL.launch && (t < 6.40 + 4 * FR || band)) {   // at contact the loop collapses (expo-in, 4 f) into the pin's ground ring = the 2nd ripple
+    const ue = Math.min(flightU(Math.min(t, 6.4)) - 125 / FP.len, 1), us = 0, ce = clamp((t - 6.4) / (4 * FR)) ** 3;
+    if (band && ue > us + 0.002) {   // s3: the collapse is too fast for sample accumulation (comb of loop copies) -> evaluated at the
+      // frame centre and drawn as one analytic smear frame: a trailing smear over the swept region + a crisp leading edge
+      const ta = Math.max(6.4, tqc - SH / 2), tb = Math.min(T1c, tqc + SH / 2), wgt = (tb - ta) / SH;
+      const CE = x => clamp((x - 6.4) / (4 * FR)) ** 3, c0 = CE(ta), c1 = CE(tb);
+      const P = (v, c) => { const p = pathAt(lerp(us, ue, v)).p, a = Math.PI - 2 * Math.PI * v; return [lerp(p[0], 960 + 24 * Math.cos(a), c), lerp(p[1], 642 + 24 * 0.24 * Math.sin(a), c)]; };
+      const n = 400, A = [], B = []; let sw = 0, sx = 0;
+      for (let i = 0; i <= n; i++) { A.push(P(i / n, c0)); B.push(P(i / n, c1)); const d = Math.hypot(B[i][0] - A[i][0], B[i][1] - A[i][1]); sw += d / (n + 1); sx = Math.max(sx, d); }
+      const lw = lerp(3, 5, c1), N = Math.min(96, Math.ceil(sx / (0.5 * lw))), Ak = Math.min(0.3, 0.3 * (sw / N) / lw);
+      ctx.save();
+      if (t > 6.1 && !HIDE_DOT) { const h = heroAt(t), Am = h.M.A, bm = h.M.b, T = p => [Am[0] * p[0] + Am[1] * p[1] + bm[0], Am[2] * p[0] + Am[3] * p[1] + bm[1]];
+        const hp = h.holes[0].pts.map(T), cc = centroid(hp); let R = 0; for (const q of hp) R = Math.max(R, Math.hypot(q[0] - cc[0], q[1] - cc[1]));
+        if (R > 2) { ctx.beginPath(); ctx.rect(-400, -400, W + 800, H + 800); ctx.arc(cc[0], cc[1], R + 8, 0, 2 * Math.PI, true); ctx.clip(); } }
+      // trailing smear: N analytic sub-samples of the curve across the shutter, density ramping up towards the leading edge
+      ctx.strokeStyle = ink; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash([]);
+      for (let k = 1; k < N; k++) { const f = k / N; ctx.globalAlpha = wgt * Ak * f * f; ctx.beginPath();
+        for (let i = 0; i <= n; i += 2) { const q = [lerp(A[i][0], B[i][0], f), lerp(A[i][1], B[i][1], f)]; i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+        ctx.stroke(); }
+      ctx.strokeStyle = ink; ctx.lineWidth = lw; ctx.lineCap = 'butt'; ctx.globalAlpha = wgt * 0.92; ctx.setLineDash(c1 > 0.5 ? [] : [18, 13]);
+      ctx.beginPath(); B.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); ctx.restore();
+    } else if (ue > us + 0.002) { ctx.save();
+      if (t > 6.1 && !HIDE_DOT) { // keep the route out of the pin's eye: clip away the hero hole (+ margin)
+        const h = heroAt(t), A = h.M.A, b = h.M.b, T = p => [A[0] * p[0] + A[1] * p[1] + b[0], A[2] * p[0] + A[3] * p[1] + b[1]];
+        const hp = h.holes[0].pts.map(T), cc = centroid(hp); let R = 0; for (const q of hp) R = Math.max(R, Math.hypot(q[0] - cc[0], q[1] - cc[1]));
+        if (R > 2) { ctx.beginPath(); ctx.rect(-400, -400, W + 800, H + 800); ctx.arc(cc[0], cc[1], R + 8, 0, 2 * Math.PI, true); ctx.clip(); } }
+      const tq = qT(t), whip = tq > 6.16 && tq < 6.30;   // in the whip a dashed line accumulates into a barcode: continuous + 50 %
+      ctx.strokeStyle = ink; ctx.globalAlpha = whip ? 0.5 : 0.92; ctx.lineWidth = lerp(3, 5, ce); ctx.lineCap = 'butt'; ctx.setLineDash(whip || ce > 0.5 ? [] : [18, 13]);
+      ctx.beginPath(); const n = 400; for (let i = 0; i <= n; i++) { const v = i / n; let p = pathAt(lerp(us, ue, v)).p;
+        if (ce > 0) { const a = Math.PI - 2 * Math.PI * v; p = [lerp(p[0], 960 + 24 * Math.cos(a), ce), lerp(p[1], 642 + 24 * 0.24 * Math.sin(a), ce)]; }
+        i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); } ctx.stroke(); ctx.restore(); }
+  }
+  // impact rings + contact shadow under the pin
+  if (t >= 6.38 && t < 7.4) { ctx.save(); ctx.strokeStyle = ink;
+    for (let j = 0; j < 3; j++) { const τ = t - [6.4, 6.4 + 4 * FR, 6.64][j]; if (τ < 0 || τ > 0.85) continue; const e = EO(τ / 0.85);
+      ctx.globalAlpha = 0.5 * (1 - τ / 0.85); ctx.lineWidth = 4.5 * (1 - e) + 1; ctx.beginPath(); ctx.ellipse(960, 642, 24 + 360 * e, (24 + 360 * e) * 0.24, 0, 0, 2 * Math.PI); ctx.stroke(); }
+    ctx.restore(); }
+  if (t >= 6.36 && t < 7.2 && !HIDE_DOT) { const hop = t > 7.0 ? clamp((t - 7.0) / 0.12) : 0; ctx.save(); ctx.fillStyle = ink; ctx.globalAlpha = 0.14 * smooth(6.36, 6.44, t) * (1 - hop);
+    ctx.beginPath(); ctx.ellipse(960, 644, 62 * (1 - 0.4 * hop), 11, 0, 0, 2 * Math.PI); ctx.fill(); ctx.restore(); }
+  drawUI(ink, t);
+}
+function drawFields(t) {
+  let start = 0; for (let i = fields.length - 1; i >= 0; i--) if (fields[i].reg(t) === 'full') { start = i; break; }
+  for (let i = start; i < fields.length; i++) { const r = fields[i].reg(t); if (!r) continue; ctx.save();
+    if (r !== 'full') { ctx.beginPath(); if (r.circle) ctx.arc(r.circle[0], r.circle[1], r.circle[2], 0, 2 * Math.PI); else ctx.rect(...r.rect); ctx.clip(); }
+    if (r !== 'full' && r.fw > 1.5) { ctx.restore(); drawSoftField(fields[i], r, t); continue; }
+    ctx.fillStyle = fields[i].c; ctx.fillRect(-400, -400, W + 800, H + 800); drawDecor(fields[i].ink, t); ctx.restore(); }
+}
+function drawSoftField(f, r, t) {   // field + its decor drawn offscreen, masked by a speed-wide feathered edge
+  const main = ctx; ctx = octx; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.clearRect(0, 0, W, H);
+  applyCam(ctx, CAM); ctx.fillStyle = f.c; ctx.fillRect(-400, -400, W + 800, H + 800); drawDecor(f.ink, t);
+  applyCam(ctx, CAM); ctx.globalCompositeOperation = 'destination-in'; let g;
+  if (r.circle) { const [x, y, rr] = r.circle; g = ctx.createRadialGradient(x, y, Math.max(0, rr - r.fw / 2), x, y, rr + r.fw / 2); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)'); }
+  else { const y = r.rect[1]; g = ctx.createLinearGradient(0, y - r.fw / 2, 0, y + r.fw / 2); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, '#000'); }
+  ctx.fillStyle = g; ctx.fillRect(-400, -400, W + 800, H + 800); ctx.globalCompositeOperation = 'source-over';
+  ctx = main; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(off, 0, 0); ctx.restore(); }
+
+// ---------------------------------------------------------------- camera: world drift + hero push to the loop apex + whip + impact shake
+let CAM = null;
+function camAt(t) {
+  const dA = 1 - smooth(8.3, 9.0, t), rot = dA * 0.5 * deg * Math.sin(2 * Math.PI * t / 6.4 + 0.6);
+  const zx = clamp((t - 8.5) / 1.9); let z = 1.018 + dA * 0.012 * Math.sin(2 * Math.PI * t / 3.2 + 2.2) + 0.036 * (1 - (1 - zx) * (1 - zx));
+  const push = EIO(clamp((t - 5.78) / 0.28)), rel = EIO(clamp((t - 6.16) / 0.14));
+  const hz = (0.1 * push + 0.012 * smooth(6.04, 6.16, t)) * (1 - rel);
+  const apex = [LP.cx, LP.cy - LP.r], tip = [960, LP.ground], A = [lerp(apex[0], tip[0], rel), lerp(apex[1], tip[1], rel)];
+  let dx = 0, dy = 110 * push * (1 - rel);
+  for (const [ti, amp] of [[6.4, 13], [0.4, 5], [7.6, 5]]) { const τ = t - ti; if (τ > 0 && τ < 0.5) dy += amp * Math.sin(2 * Math.PI * τ / 0.11) * Math.exp(-τ * 14); }
+  const Z = z * (1 + hz), c = Math.cos(rot), s = Math.sin(rot), vx = -hz * A[0] - W / 2, vy = -hz * A[1] - H / 2;
+  return { a: Z * c, b: Z * s, c: -Z * s, d: Z * c, e: z * (c * vx - s * vy) + W / 2 + dx, f: z * (s * vx + c * vy) + H / 2 + dy };
+}
+const applyCam = (c, k) => c.setTransform(k.a, k.b, k.c, k.d, k.e, k.f);
+
+// ---------------------------------------------------------------- drawing the hero
+function polyPath(path, P) { path.moveTo(P[0][0], P[0][1]); for (let i = 1; i < P.length; i++) path.lineTo(P[i][0], P[i][1]); path.closePath(); }
+function fillShape(parts, M, fill, shadeC, clipY, sweep) {
+  const { A, b } = M, T = p => [A[0] * p[0] + A[1] * p[1] + b[0], A[2] * p[0] + A[3] * p[1] + b[1]];
+  const body = parts.body.map(T); let y0 = 1e9, y1 = -1e9; for (const p of body) { if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+  const path = new Path2D(); polyPath(path, body); for (const h of parts.holes) polyPath(path, h.pts.map(T));
+  ctx.save(); if (clipY != null) { ctx.beginPath(); ctx.rect(-400, -400, W + 800, clipY + 400); ctx.clip(); }
+  const gr = ctx.createLinearGradient(0, y0, 0, y1); const gk = gradK; gr.addColorStop(0, tone(fill, 0.028 * gk)); gr.addColorStop(1, tone(fill, -0.022 * gk));
+  ctx.fillStyle = gr; ctx.fill(path, 'evenodd');
+  if (sweep && sweep.p > 0) { const c = b; let R = 0; for (const q of body) R = Math.max(R, Math.hypot(q[0] - c[0], q[1] - c[1]));
+    ctx.save(); ctx.clip(path, 'evenodd'); const g2 = ctx.createLinearGradient(0, y0, 0, y1); g2.addColorStop(0, tone(sweep.to, 0.028 * gradK)); g2.addColorStop(1, tone(sweep.to, -0.022 * gradK));
+    ctx.fillStyle = g2; ctx.beginPath();
+    if (sweep.dir == null) ctx.arc(c[0], c[1], R * 1.03 * EIO(sweep.p), 0, 2 * Math.PI);
+    else { const nx = Math.cos(sweep.dir), ny = Math.sin(sweep.dir); let p0 = 1e9, p1 = -1e9; for (const q of body) { const d = q[0] * nx + q[1] * ny; if (d < p0) p0 = d; if (d > p1) p1 = d; }
+      const e = p1 - (p1 - p0 + 4) * EIO(sweep.p), ox = nx * e, oy = ny * e, tx = -ny * 5000, ty = nx * 5000;
+      ctx.moveTo(ox - tx, oy - ty); ctx.lineTo(ox + tx, oy + ty); ctx.lineTo(ox + tx + nx * 5000, oy + ty + ny * 5000); ctx.lineTo(ox - tx + nx * 5000, oy - ty + ny * 5000); ctx.closePath(); }
+    ctx.fill(); ctx.restore(); }
+  if (parts.shade && parts.shade.on) { const sp = new Path2D(); polyPath(sp, parts.shade.pts.map(T)); ctx.save(); ctx.clip(path, 'evenodd'); ctx.fillStyle = shadeC; ctx.fill(sp); ctx.restore(); }
+  ctx.restore();
+  return T;
+}
+let gradK = 1;
+function drawHero(t) {
+  if (V5 && t >= TV.t0) { gradK = 0; drawTitleV5(t); return null; }
+  if (t >= MB.t0 && t < MB.t1) { gradK = 0; drawMBuild(t); return null; }
+  gradK = 1 - smooth(8.1, 8.5, t); const h = heroAt(t);
+  const T = HIDE_DOT ? (p => [h.M.A[0] * p[0] + h.M.A[1] * p[1] + h.M.b[0], h.M.A[2] * p[0] + h.M.A[3] * p[1] + h.M.b[1]])   // v5 nolink=dot: the hero body is not drawn (its strokes stay)
+    : fillShape(h, h.M, h.fill, h.shadeC, h.clipY, h.sweep);
+  const sc = Math.sqrt(Math.abs(h.M.A[0] * h.M.A[3] - h.M.A[1] * h.M.A[2]));
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = h.strokeC;
+  for (const s of h.strokes) { const w = s.w * sc; if (w < 0.6) continue; const Q = s.pts.map(T); let len = 0; for (let i = 1; i < Q.length; i++) len += Math.hypot(Q[i][0] - Q[i - 1][0], Q[i][1] - Q[i - 1][1]);
+    const al = smooth(0.7, 1.0, len / w); if (al <= 0.01) continue;   // a slot shorter than its width is only a round-cap speck
+    ctx.globalAlpha = al; ctx.lineWidth = w; ctx.beginPath(); Q.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])); ctx.stroke(); }
+  ctx.restore();
+  return h;
+}
+
+// ---------------------------------------------------------------- letters built from the film's two primitives (ring + capsule)
+// geometry measured from the Outfit outlines at this layout (screen px); the true outline takes over in the last 2 f
+const LG = {
+  o: { c: [783.8, 505.5], Ro: 64, Ri: 31.5 },
+  r: { c: [926, 500], Ro: 57, Ri: 27, arc: 'r', stems: [[864, 897, 441, 568, 500]] },
+  p: { c: [1029.3, 505.6], Ro: 63.5, Ri: 31, stems: [[968, 1000, 441, 618.5, 505]] },
+  h: { c: [1167, 499], Ro: 57, Ri: 24, arc: 'arch', stems: [[1110, 1143, 383, 568, 499], [1191, 1224, 499, 568, 499]] },
+  e: { c: [1298.9, 505.5], Ro: 62, Ri: 33, arc: 'e', bar: [1262, 1366, 488, 522] },
+};
+function ringPath(p, c, Ro, Ri, a0, a1) {   // annular sector a0 -> a1 (clockwise on screen); full ring when it spans 2π
+  if (a1 - a0 >= 2 * Math.PI - 1e-4) { p.moveTo(c[0] + Ro, c[1]); p.arc(c[0], c[1], Ro, 0, 2 * Math.PI); p.closePath();
+    if (Ri > 0.3) { p.moveTo(c[0] + Ri, c[1]); p.arc(c[0], c[1], Ri, 2 * Math.PI, 0, true); p.closePath(); } return p; }
+  p.moveTo(c[0] + Ro * Math.cos(a0), c[1] + Ro * Math.sin(a0)); p.arc(c[0], c[1], Ro, a0, a1);
+  p.lineTo(c[0] + Ri * Math.cos(a1), c[1] + Ri * Math.sin(a1)); p.arc(c[0], c[1], Math.max(0, Ri), a1, a0, true); p.closePath(); return p; }
+function capMask(x0, x1, top, bot) { const m = new Path2D(), rr = (x1 - x0) / 2 + 7; m.roundRect(x0 - 7, top - rr, x1 - x0 + 14, Math.max(0, bot - top) + 2 * rr, rr); return m; }
+const _gp = {};
+function glyphP(l) { if (_gp[l.ch]) return _gp[l.ch]; const p = new Path2D(); polyPath(p, l.outer); for (const h of l.holes) polyPath(p, h); return (_gp[l.ch] = p); }
+function fillChannel(rings, cens, ri, ro, cu) {   // open a ring's lower half with a channel as wide as the counter, rising from below: never a slit
+  const cl = new Path2D(); cl.rect(-400, -400, W + 800, H + 800); if (cu > 0) for (const c of cens) cl.rect(c[0] - ri, lerp(c[1] + ro + 1, c[1], cu), 2 * ri, H);
+  ctx.save(); if (cu > 0) ctx.clip(cl, 'evenodd'); for (const r of rings) ctx.fill(r); ctx.restore();
+}
+function smearCap(c, pA, pB, r, col) {   // analytic box-shutter blur of a disc moving pA -> pB while the shutter is open: capsule + linear alpha ramps
+  const dx = pB[0] - pA[0], dy = pB[1] - pA[1], L = Math.hypot(dx, dy), mx = (pA[0] + pB[0]) / 2, my = (pA[1] + pB[1]) / 2;
+  if (L < 1.5) { c.fillStyle = col; c.beginPath(); c.arc(mx, my, r, 0, 2 * Math.PI); c.fill(); return; }
+  const [R0, G0, B0] = hexRgb(col).map(v => Math.round(v * 255)), cs = a => `rgba(${R0},${G0},${B0},${a})`, ux = dx / L, uy = dy / L, T = L + 2 * r, am = Math.min(1, 2 * r / L), o1 = Math.min(2 * r, L) / T, an = Math.atan2(dy, dx);
+  const gr = c.createLinearGradient(mx - ux * T / 2, my - uy * T / 2, mx + ux * T / 2, my + uy * T / 2);
+  gr.addColorStop(0, cs(0)); gr.addColorStop(o1, cs(am)); gr.addColorStop(1 - o1, cs(am)); gr.addColorStop(1, cs(0));
+  c.fillStyle = gr; c.beginPath(); c.arc(pA[0], pA[1], r, an + Math.PI / 2, an + 3 * Math.PI / 2); c.arc(pB[0], pB[1], r, an - Math.PI / 2, an + Math.PI / 2); c.closePath(); c.fill();
+}
+function drawStems(stems, s, gp) { for (const [x0, x1, y0, y1, fr] of stems || []) { ctx.save(); ctx.clip(capMask(x0, x1, lerp(fr, y0, s), lerp(fr, y1, s))); ctx.fill(gp, 'evenodd'); ctx.restore(); } }
+// "m": the hero circle divides like a cell into two rings sharing a wall, their lower halves open into arches, three legs extrude
+const MB = { t0: 8.30, t1: 8.6, arches: [[571.5, 497], [650, 497]], Ro: 55.5, Ri: 22.5,
+  legs: [[515.4, 548.5, 441, 568, 497], [594, 627, 497, 568, 497], [673, 705.6, 497, 568, 497]] };
+let MB_R0 = null;
+const worldBody = h => { const A = h.M.A, b = h.M.b; return h.body.map(p => [A[0] * p[0] + A[1] * p[1] + b[0], A[2] * p[0] + A[3] * p[1] + b[1]]); };
+function drawMBuild(t) {
+  const hm = heroAt(t), A = hm.M.A, mc = centroid(worldBody(hm));
+  if (MB_R0 == null) MB_R0 = Math.sqrt(Math.abs(area(worldBody(heroAt(MB.t0)))) / Math.PI);
+  const dt = Math.sqrt(Math.abs(A[0] * A[3] - A[1] * A[2])) || 1, cen = WM.letters[0].cen;
+  const sp = EIO(clamp((t - MB.t0) / 0.15)), R = lerp(MB_R0, MB.Ro, sp), ri = MB.Ri * EO(clamp((t - 8.37) / 0.09));
+  const cu = EO(clamp((t - 8.44) / 0.12)), s = EO(clamp((t - 8.40) / 0.14)), xg = qT(t) >= 8.566 ? 1 : 0;
+  ctx.save(); ctx.translate(mc[0], mc[1]); ctx.transform(A[0] / dt, A[2] / dt, A[1] / dt, A[3] / dt, 0, 0); ctx.translate(-cen[0], -cen[1]);
+  ctx.fillStyle = C.cream;
+  const gp = glyphP(WM.letters[0]); if (xg) { ctx.fill(gp, 'evenodd'); ctx.restore(); return; }
+  const ac = MB.arches.map(a => [lerp(cen[0], a[0], sp), lerp(cen[1], a[1], sp)]);
+  fillChannel(ac.map(c => ringPath(new Path2D(), c, R, ri, 0, 2 * Math.PI)), ac, MB.Ri, R, cu);
+  drawStems(MB.legs, s, gp);
+  ctx.restore();
+}
+// ---------------------------------------------------------------- end card: the seven chapter dots fly into the full stop
+const DOTC = [C.cream, C.mari, C.verm, C.ultra, I.plane.shadeC, C.cream, C.verm].map(c => V5 && c === C.cream ? C.ink : c);   // each chapter's field colour (v5.1: cream -> ink on the cream end card)
+const ED = { t0: 8.44, st: 0.04, dur: 0.70 };
+const edArr = k => ED.t0 + ED.st * k + ED.dur;   // arrivals 9.14 .. 9.38, in chapter order
+const EDK = [[0, 0], [0.36, 0.55], [0.8, 0.87], [1, 1]], EDE = bez(0.4, 0, 0.5, 1);   // fast rewind along the bottom, slower sweep, rise
+const edF = x => { const y = EDE(clamp(x)); for (let i = 1; i < EDK.length; i++) if (y <= EDK[i][0]) return lerp(EDK[i - 1][1], EDK[i][1], (y - EDK[i - 1][0]) / (EDK[i][0] - EDK[i - 1][0])); return 1; };
+const RT0 = [[1824, 991], [1560, 999], [1200, 1003], [860, 996], [620, 966], [548, 896], [616, 846], [790, 846], [960, 858], [1130, 852], [1300, 830], [1416, 772], [1414, 660]];
+if (V5) { RT0[11] = [TV.stop[0] - 15, 776]; RT0[12] = [TV.stop[0] - 3, 672]; }   // v5: rise straight up into the title's full stop, clear of the 画
+function edRoute(E) {   // ONE route for all 7: back along the bottom (the day rewinds), one left -> right sweep under the tagline, up into the stop
+  const P = [...RT0, E], out = [P[0].slice()], len = [0];
+  for (let i = 0; i < P.length - 1; i++) { const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+    for (let j = 1; j <= 24; j++) { const u = j / 24, u2 = u * u, u3 = u2 * u, o = out[out.length - 1];
+      const q = [0, 1].map(d => 0.5 * (2 * p1[d] + (p2[d] - p0[d]) * u + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * u2 + (3 * p1[d] - p0[d] - 3 * p2[d] + p3[d]) * u3));
+      len.push(len[len.length - 1] + Math.hypot(q[0] - o[0], q[1] - o[1])); out.push(q); } }
+  const L = len[len.length - 1];
+  return { L, at: s => { s = clamp(s, 0, L); let lo = 0, hi = len.length - 1; while (hi - lo > 1) { const md = (lo + hi) >> 1; if (len[md] < s) lo = md; else hi = md; }
+    const f = (s - len[lo]) / (len[hi] - len[lo] || 1); return [lerp(out[lo][0], out[hi][0], f), lerp(out[lo][1], out[hi][1], f)]; } };
+}
+function stopScreen() { const p = new DOMMatrix([CAM.a, CAM.b, CAM.c, CAM.d, CAM.e, CAM.f]).transformPoint(new DOMPoint(WM.dot.cen[0], WM.dot.cen[1])); return [p.x, p.y]; }
+function drawEndDots(t) {
+  if (t < 8.0) return;
+  const tf = qT(t), E = stopScreen(), yd = 1002 - 11, w6 = 1 - smooth(8.3, 8.6, t), ct = smooth(8.4, 8.75, t);
+  const ks = Math.sqrt(Math.abs(CAM.a * CAM.d - CAM.b * CAM.c)), route = tf >= ED.t0 ? edRoute(E) : null;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.lineCap = 'round';
+  // arrivals: a thin ring in the dot's colour just outside the stop (the stop itself stays #FF4F2B)
+  for (let k = 0; k < 7; k++) { const τ = t - edArr(k); if (τ < 0 || τ > 0.14) continue;
+    ctx.globalAlpha = 1 - smooth(0.05, 0.14, τ); ctx.strokeStyle = DOTC[k]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(E[0], E[1], (26 + 8 * EO(τ / 0.12)) * ks, 0, 2 * Math.PI); ctx.stroke(); }
+  if (t > 9.0) { const cl = new Path2D(); cl.rect(0, 0, W, H); cl.arc(E[0], E[1], WM.dot.r * ks * dotBeat(t) - 0.5, 0, 2 * Math.PI); ctx.clip(cl, 'evenodd'); }   // the stop absorbs them
+  let xr = W - 96;
+  for (let k = 6; k >= 0; k--) {
+    const wgt = k === 6 ? w6 : 0, len = 22 * EM(wgt), r = 4.5, x = xr - len / 2; xr -= len + 20;
+    const τf = tf - (ED.t0 + ED.st * k);
+    const paint = (al, col) => { if (al <= 0.002) return; ctx.globalAlpha = al; ctx.strokeStyle = col; };
+    if (τf < 0) { const al0 = 0.3 + 0.7 * Math.max(wgt, ct);
+      const c0 = V5 && hx(fieldAt(t, [x, yd])) === hx(C.cream) ? C.ink : C.cream;   // v5.1: ink over the cream paper
+      for (const [al, col] of [[al0 * (1 - ct), c0], [al0 * ct, DOTC[k]]]) { if (al <= 0.002) continue; paint(al, col); ctx.lineWidth = 2 * r; ctx.beginPath(); ctx.moveTo(x - len / 2, yd); ctx.lineTo(x + len / 2 + 0.01, yd); ctx.stroke(); }
+      continue; }
+    if (τf >= ED.dur) continue;
+    const s0 = W - 96 - x, sAt = v => s0 + (route.L - s0) * edF(v / ED.dur), rd = lerp(r, 11, smooth(0, 0.3, τf / ED.dur));   // grows to the 22 px family dot
+    ctx.globalAlpha = 1; smearCap(ctx, route.at(sAt(Math.max(0, τf - SH / 2))), route.at(sAt(τf + SH / 2)), rd, DOTC[k]);
+  }
+  ctx.restore();
+}
+const RINGS = [[9.4, C.mari, 260], [9.43, C.verm, 200], [9.53, C.ultra, 240], [9.56, V5 ? C.ink : C.cream, 160]];   // v5.1: ink replaces cream on the cream end card   // the last heartbeat has reach
+function drawEndRings(t) { if (t < 9.35) return; const [cx, cy] = WM.dot.cen; ctx.save();
+  for (const [t0, col, R] of RINGS) { const τ = t - t0 + FR; if (τ <= 0 || τ > 0.42) continue; const e = EO(clamp(τ / 0.45));
+    ctx.globalAlpha = 1 - smooth(0.08, 0.42, τ); ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, 30 + (R - 30) * e, 0, 2 * Math.PI); ctx.stroke(); }
+  ctx.restore(); }
+// ---------------------------------------------------------------- wordmark letters bud out of the hero circle
+const LT = cues.letters;
+const EFLY = bez(0.2, 0.6, 0.3, 1);
+const LANE = [352, 352, 346, 340, 296, 290], _lp = {};   // apex lane (centre y) per letter: clears every glyph already set by >= 12 px
+function letterPath(it) {   // bud out of the hero, rise to the lane, drop onto the slot from above-right (never across the previous letter)
+  if (_lp[it.k]) return _lp[it.k];
+  const ts = LT.t0 + LT.step * it.k, src = heroAt(ts).M.b, T = it.dot ? it.cen : LG[it.ch].c, Y = LANE[it.k];
+  const P = [[src[0] + 30, src[1] - 24], [src[0] + 70, Y - 70], [T[0] + 120, Y - 50], T];
+  return (_lp[it.k] = s => { const a = 1 - s, w = [a * a * a, 3 * a * a * s, 3 * a * s * s, s * s * s]; return [0, 1].map(j => w[0] * P[0][j] + w[1] * P[1][j] + w[2] * P[2][j] + w[3] * P[3][j]); });
+}
+function drawLetters(t) {
+  if (V5 || t < LT.t0 - FR) return;
+  const tf = qT(t), items = WM.letters.slice(1).map((l, i) => ({ ...l, k: i })); items.push({ dot: true, k: 5, cen: WM.dot.cen, r: WM.dot.r });
+  for (const it of items) {
+    // flight + stage are evaluated at the frame centre (all mb samples identical -> no onion skin) and smeared analytically at
+    // the full speed x shutter; the cuts/extrusions stay continuous in t so the harness accumulation blurs them
+    const ts = LT.t0 + LT.step * it.k, τ = t - ts, τf = tf - ts; if (τf < 0) continue;
+    const g = it.dot ? null : LG[it.ch], path = letterPath(it), sAt = x => EFLY(clamp(x / LT.fly));
+    const pA = path(sAt(Math.max(0, τf - SH / 2))), pB = path(sAt(τf + SH / 2));
+    const R = it.dot ? it.r : g.Ro, rr = lerp(R * 0.22, R, EO(clamp(τf / 0.22))), land = impactSimple(τ - 0.34);
+    if (it.dot) { ctx.save(); const br = dotBeat(t), col = mixC(C.cream, C.verm, smooth(0.1, 0.35, τf));
+      if (τf < LT.fly) smearCap(ctx, pA, pB, rr * br, col);
+      else { const [cx, cy] = it.cen; ctx.translate(cx, cy + rr * land * 0.5); ctx.scale(1 + land, 1 - land); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, rr * br, 0, 2 * Math.PI); ctx.fill(); }
+      ctx.restore(); continue; }
+    ctx.save();
+    if (land) { ctx.translate(it.cen[0], WM.yB); ctx.scale(1 + land, 1 - land); ctx.translate(-it.cen[0], -WM.yB); }
+    const xg = τf >= 0.34 ? 1 : 0, gp = glyphP(it);
+    if (τf < 0.14) smearCap(ctx, pA, pB, rr, C.cream);
+    else if (xg < 1) {   // ring (counter opens) + capsules extruding from it; arcs cut open where the letter has no bowl
+      const [cx, cy] = path(sAt(τ)), dx = cx - g.c[0], dy = cy - g.c[1]; ctx.translate(dx, dy); ctx.fillStyle = C.cream;
+      const ri = g.Ri * EO(clamp((τ - 0.14) / 0.1)), s = g.arc === 'arch' ? EO(clamp((τ - 0.13) / 0.15)) : EIO(clamp((τ - 0.15) / 0.16));
+      let a0 = 0, a1 = 2 * Math.PI;
+      if (g.arc === 'r') { a1 = 300 * deg; a0 = lerp(a1 - 2 * Math.PI, Math.PI, EO(clamp((τ - 0.12) / 0.16))); }
+      else if (g.arc === 'e') { a1 = 372 * deg; a0 = lerp(12 * deg, 41 * deg, EO(clamp((τ - 0.2) / 0.12))); }
+      const ring = ringPath(new Path2D(), g.c, rr, ri, a0, a1);
+      if (g.arc === 'arch') fillChannel([ring], [g.c], g.Ri, rr, EO(clamp((τ - 0.17) / 0.12))); else ctx.fill(ring);
+      drawStems(g.stems, s, gp);
+      if (g.bar) { const [x0, x1, y0, y1] = g.bar, rb = (y1 - y0) / 2, xe = lerp(x0 + 30, x1, s), mk = new Path2D(); mk.roundRect(x0, y0, xe - x0 + rb, y1 - y0, rb); ctx.save(); ctx.clip(mk); ctx.fill(gp, 'evenodd'); ctx.restore(); }
+      ctx.translate(-dx, -dy); }
+    if (xg > 0) { ctx.globalAlpha = xg; ctx.fillStyle = C.cream; ctx.fill(gp, 'evenodd'); }
+    ctx.restore();
+  }
+}
+// ---------------------------------------------------------------- v5 title build (pure in t)
+let TV_H = null;
+const TC = C.ink;   // v5.1: the title is ink on the cream paper
+function tvHero() { if (TV_H) return TV_H; const wb = worldBody(heroAt(TV.t0)); return (TV_H = { c: centroid(wb), R: Math.sqrt(Math.abs(area(wb)) / Math.PI) }); }
+const tvSplit = x => EIO(clamp((x - TV.t0) / TV.split));
+function tvCell(it, x) { const h = tvHero(), sp = tvSplit(x); return { c: [lerp(h.c[0], it.cen[0], sp), lerp(h.c[1], it.cen[1], sp)], r: lerp(h.R, TV.rc, sp) }; }
+const tvStart = (k, i) => TV.m0 + k * TV.st + i * TV.cst;
+function tvStop(x) {   // the full stop squeezes out of the dividing circle (under the cells), lands 8.46, then lives with the end card's beat
+  const h = tvHero(), ss = EIO(clamp((x - TV.t0) / 0.16)), E = TV.stop, land = impactSimple(x - (TV.t0 + 0.16));
+  const r = lerp(h.R, TV.stopR, EO(clamp((x - TV.t0) / 0.12))) * (x >= TV.t0 + 0.16 ? dotBeat(x) : 1);
+  return { c: [lerp(h.c[0], E[0], ss), lerp(h.c[1], E[1], ss) - 36 * Math.sin(Math.PI * ss)], r, land, fly: x < TV.t0 + 0.16,
+    col: mixC(TC, C.verm, smooth(TV.t0 + 0.04, TV.t0 + 0.10, x)) };
+}
+function drawTitleV5(t) {
+  const tf = qT(t);
+  if (!HIDE_DOT) {   // the stop is drawn first: while it is still inside the cells it is hidden by them
+    const S = tvStop(t);
+    if (S.fly) { const a = tvStop(Math.max(TV.t0, tf - SH / 2)), b = tvStop(tf + SH / 2); smearCap(ctx, a.c, b.c, tvStop(tf).r, tvStop(tf).col); }
+    else { ctx.save(); ctx.translate(S.c[0], S.c[1] + S.r * S.land * 0.5); ctx.scale(1 + S.land, 1 - S.land); ctx.fillStyle = S.col; ctx.beginPath(); ctx.arc(0, 0, S.r, 0, 2 * Math.PI); ctx.fill(); ctx.restore(); }
+  }
+  if (HIDE_TITLE) return;
+  ctx.save(); ctx.fillStyle = TC;
+  for (const it of TV.items) {
+    if (t < tvStart(it.k, 0)) {   // a cell in flight: frame-centre time + analytic smear (no onion skin under the harness mb)
+      const a = tvCell(it, Math.max(TV.t0, tf - SH / 2)), b = tvCell(it, tf + SH / 2); smearCap(ctx, a.c, b.c, tvCell(it, tf).r, TC); continue; }
+    const cell = tvCell(it, t), ks = cell.r / TV.rc;
+    it.comps.forEach((cp, i) => {
+      const τ = t - tvStart(it.k, i), u = clamp(τ / TV.md), g = EM(u), land = 0.6 * impactSimple(τ - TV.md);
+      const st = 1 + 0.1 * Math.sin(Math.PI * g), cx = it.cen[0], by = TV.yB + 22;   // bloom: a little vertical stretch mid-morph, landing squash on the baseline
+      const X = p => [cx + (p[0] - cx) * (1 + land) / st, by + (p[1] - by) * (1 - land) * st - (st - 1) * (by - it.cen[1])];
+      const path = new Path2D();
+      if (u >= 1) { polyPath(path, cp.raw.map(X)); for (const h of cp.holes) polyPath(path, h.raw.map(X)); }   // exact outline once formed
+      else {
+        polyPath(path, cp.circle.map((q, n) => X(lerp2([cell.c[0] + q[0] * ks, cell.c[1] + q[1] * ks], cp.outer[n], g))));
+        for (const h of cp.holes) { const hc = centroid(h.pts), gh = clamp((g - 0.3) / 0.7); polyPath(path, h.pts.map(q => X([lerp(hc[0], q[0], gh), lerp(hc[1], q[1], gh)]))); }
+      }
+      ctx.fill(path, 'evenodd');
+    });
+  }
+  ctx.restore();
+}
+const lerp2 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
+function dotBeat(t) { let b = 1 + 0.02 * Math.sin(2 * Math.PI * (t - 8.8) / 0.8) * smooth(9.0, 9.3, t);
+  for (let k = 0; k < 7; k++) { const τ = t - edArr(k); if (τ > 0 && τ < 0.1) b += 0.06 * Math.sin(Math.PI * τ / 0.1); }   // each chapter dot lands in the stop
+  for (const [tb, a] of [[9.4, 0.2], [9.53, 0.13]]) { const τ = t - tb + FR; if (τ > 0 && τ < 0.16) b += a * Math.sin(Math.PI * τ / 0.16) * (1 - τ / 0.32); }
+  return b; }
+function impactSimple(τ) { if (τ < 0 || τ > 1) return 0; return 0.1 * Math.sin(2 * Math.PI * τ / 0.26) * Math.exp(-τ * 8); }
+function drawTagline(t) {
+  if (V5) { drawTaglineV5(t); return; }
+  const t0 = cues.tagline; if (t < t0) return;
+  ctx.save(); ctx.fillStyle = C.cream; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.letterSpacing = '0px';
+  ctx.font = '500 40px "HarmonyOS Sans SC"'; const TR = 11, GAP = 30, yb = 702, wd = ch => ctx.measureText(ch).width;   // 0.28 em tracking, 一形 · 万象 as two words
+  const xs = [960 - GAP - wd('形') - TR - wd('一'), 960 - GAP - wd('形'), 960 + GAP, 960 + GAP + wd('万') + TR];
+  ['一', '形', '万', '象'].forEach((ch, i) => { const e = EO(clamp((t - t0 - i * 0.05) / 0.45)); ctx.globalAlpha = e * 0.94; ctx.fillText(ch, xs[i], yb + 22 * (1 - e)); });
+  const e2 = EO(clamp((t - t0 - 0.12) / 0.4)); ctx.globalAlpha = e2 * 0.95; ctx.fillStyle = C.verm; ctx.beginPath();
+  ctx.arc(960, yb - 15 + 22 * (1 - e2), 4.8 * e2 * (1 + 1.6 * (dotBeat(t) - 1 - 0.02 * Math.sin(2 * Math.PI * (t - 8.8) / 0.8) * smooth(9.0, 9.3, t))), 0, 2 * Math.PI); ctx.fill();
+  const e3 = EO(clamp((t - t0 - 0.25) / 0.5)); ctx.globalAlpha = e3 * 0.65; ctx.fillStyle = C.cream; ctx.textAlign = 'center'; ctx.font = '500 17px "IBM Plex Mono"'; ctx.letterSpacing = '4px';
+  ctx.fillText('ONE SHAPE · EVERY STORY', 962, 758 + 14 * (1 - e3));
+  ctx.restore();
+}
+function drawTaglineV5(t) {   // v5: the small English line under the title, the tagline's vermilion dot between the words
+  const t0 = 8.62; if (t < t0 || HIDE_TITLE) return;
+  ctx.save(); ctx.textBaseline = 'alphabetic'; ctx.font = '500 30px "IBM Plex Mono"'; ctx.letterSpacing = '9px';
+  const yb = 694, e = EO(clamp((t - t0) / 0.45)), e2 = EO(clamp((t - t0 - 0.1) / 0.4)), dy = 18 * (1 - e);
+  ctx.globalAlpha = e * 0.8; ctx.fillStyle = C.ink; ctx.textAlign = 'right'; ctx.fillText('SHAPE', 960 - 22 + 9, yb + dy);   // +9: the trailing letter-spacing
+  ctx.textAlign = 'left'; ctx.fillText('MORPH', 960 + 22, yb + dy);
+  ctx.globalAlpha = e2 * 0.95; ctx.fillStyle = C.verm; ctx.beginPath();
+  ctx.arc(960, yb - 11 + 18 * (1 - e2), 5.5 * e2 * (1 + 1.6 * (dotBeat(t) - 1 - 0.02 * Math.sin(2 * Math.PI * (t - 8.8) / 0.8) * smooth(9.0, 9.3, t))), 0, 2 * Math.PI); ctx.fill();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------- finishing: vignette + animated grain
+const grain = document.createElement('canvas'); grain.width = grain.height = 256;
+{ const g = grain.getContext('2d'), im = g.createImageData(256, 256); let s = 1234567;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  for (let i = 0; i < 256 * 256; i++) { const v = 128 + ((rnd() + rnd() + rnd() - 1.5) * 90) | 0; im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; }
+  g.putImageData(im, 0, 0); }
+const GT = 512, GN = new Int8Array(GT * GT);
+{ let s = 987654321; const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return (s + 0.5) / 4294967296; };
+  const a = new Float32Array(GT * GT); for (let i = 0; i < a.length; i++) a[i] = Math.sqrt(-2 * Math.log(rnd())) * Math.cos(2 * Math.PI * rnd());
+  const b = new Float32Array(GT * GT); let ss = 0;   // soften to ~1.5-2 px grain
+  for (let y = 0; y < GT; y++) for (let x = 0; x < GT; x++) { let v = 0; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) v += a[((y + j) & (GT - 1)) * GT + ((x + i) & (GT - 1))] * (2 - Math.abs(i)) * (2 - Math.abs(j)); b[y * GT + x] = v; ss += v * v; }
+  const k = 2.0 / Math.sqrt(ss / b.length); for (let i = 0; i < b.length; i++) GN[i] = Math.max(-6, Math.min(6, Math.round(b[i] * k))); }
+let PAPER = null;
+{ const im = new Image(); im.src = '/assets/textures/paper/Paper001_4K_color.jpg'; await im.decode(); const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.drawImage(im, 0, 0, 4096, 4096, 0, 0, 2304, 2304); const d = g.getImageData(0, 0, W, H).data, L = new Float32Array(W * H); let m = 0;
+  for (let i = 0; i < L.length; i++) { L[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11; m += L[i]; } m /= L.length; let v = 0; for (let i = 0; i < L.length; i++) { L[i] -= m; v += L[i] * L[i]; }
+  const k = 0.022 / Math.sqrt(v / L.length); PAPER = new Float32Array(W * H); for (let i = 0; i < L.length; i++) PAPER[i] = Math.max(-0.06, Math.min(0.06, L[i] * k)) / 765; }
+function finish(f) {
+  const img = ctx.getImageData(0, 0, W, H), d = img.data, ox = (f * 197) % GT, oy = (f * 331) % GT;
+  for (let y = 0; y < H; y++) { const row = ((y + oy) & (GT - 1)) * GT; let i = y * W * 4, j = y * W;
+    for (let x = 0; x < W; x++, i += 4, j++) { const r = d[i], g = d[i + 1], b = d[i + 2], pm = 1 + PAPER[j] * (r + g + b), n = GN[row + ((x + ox) & (GT - 1))];
+      d[i] = r * pm + n; d[i + 1] = g * pm + n; d[i + 2] = b * pm + n; } }
+  ctx.putImageData(img, 0, 0); }
+const vig = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 1.05); vig.addColorStop(0, 'rgba(0,0,0,0)'); vig.addColorStop(1, 'rgba(0,0,0,0.13)');
+
+// ---------------------------------------------------------------- v5 link elements: window.linkAt(t), pure in t, 1920x1080 output px
+const camPt = (K, p) => [K.a * p[0] + K.c * p[1] + K.e, K.b * p[0] + K.d * p[1] + K.f];
+const hx = c => c.toLowerCase();
+function ellipseOf(P) {   // area centroid + second moments -> equivalent ellipse; dev = max normalised radial deviation from it
+  let A = 0, cx = 0, cy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < P.length; i++) { const [x0, y0] = P[i], [x1, y1] = P[(i + 1) % P.length], c = x0 * y1 - x1 * y0;
+    A += c; cx += (x0 + x1) * c; cy += (y0 + y1) * c; sxx += (x0 * x0 + x0 * x1 + x1 * x1) * c; syy += (y0 * y0 + y0 * y1 + y1 * y1) * c; sxy += (x0 * y1 + 2 * x0 * y0 + 2 * x1 * y1 + x1 * y0) * c; }
+  A /= 2; cx /= 6 * A; cy /= 6 * A;
+  const vxx = sxx / 12 / A - cx * cx, vyy = syy / 12 / A - cy * cy, vxy = sxy / 24 / A - cx * cy;
+  const tr = vxx + vyy, dt = Math.sqrt(Math.max(0, (vxx - vyy) ** 2 / 4 + vxy * vxy)), l1 = tr / 2 + dt, l2 = Math.max(1e-6, tr / 2 - dt);
+  const ang = 0.5 * Math.atan2(2 * vxy, vxx - vyy), ra = 2 * Math.sqrt(l1), rb = 2 * Math.sqrt(l2), ca = Math.cos(ang), sa = Math.sin(ang);
+  let dev = 0; for (const [x, y] of P) { const dx = x - cx, dy = y - cy; dev = Math.max(dev, Math.abs(Math.hypot((dx * ca + dy * sa) / ra, (-dx * sa + dy * ca) / rb) - 1)); }
+  return { x: cx, y: cy, rx: ra, ry: rb, rot: ang, dev, area: Math.abs(A) };
+}
+function clipAbove(P, yc) { const o = []; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], ia = a[1] <= yc, ib = b[1] <= yc;
+  if (ia) o.push(a); if (ia !== ib) { const f = (yc - a[1]) / (b[1] - a[1]); o.push([lerp(a[0], b[0], f), yc]); } } return o; }
+function fieldAt(t, p) { let c = C.cream; for (const f of fields) { const r = f.reg(t); if (!r) continue;
+  if (r === 'full' || (r.circle && Math.hypot(p[0] - r.circle[0], p[1] - r.circle[1]) < r.circle[2]) || (r.rect && p[1] >= r.rect[1])) c = f.c; } return c; }
+const HNAME = { cup: 'mug', sun: 'sun disc', sunset: 'setting sun', gull: 'gull', plane: 'paper plane', pin: 'location pin', heart: 'heart', m: 'm' };
+function heroPhase(t) {
+  if (t < drop.t1) return t < 0.36 ? 'ink drop, falling (1.35x motion stretch)' : 'ink drop -> mug';
+  if (t >= FL.t0 && t < FL.t1) return t < 6.3 ? 'paper plane (loop flight)' : 'plane -> capsule -> pin';
+  const m = cues.morphs.find(x => x.P && x.key !== 'plane>pin' && t >= x.t0 && t < x.t1);
+  if (m) return m.P.via ? `${HNAME[m.a]} -> circle -> ${HNAME[m.b]} (u ${((t - m.t0) / (m.t1 - m.t0)).toFixed(2)})` : `${HNAME[m.a]} -> ${HNAME[m.b]} (circle to circle)`;
+  let cur = 'cup'; for (const n of ['cup', 'sun', 'sunset', 'gull', 'plane', 'pin', 'heart', 'm']) if (t >= cues.land[n]) cur = n; return HNAME[cur] + ' (hold)';
+}
+function linkAtV5(t) {
+  t = clamp(t, 0, 9.999); const K = camAt(t), ks = Math.sqrt(Math.abs(K.a * K.d - K.b * K.c)), crot = Math.atan2(K.b, K.a), out = [];
+  const dotEl = (x, y, rx, ry, rot, a, fill, note, extra = {}) => { const g = gradK0(t);
+    out.push({ id: 'dot', type: 'circle', x: +x.toFixed(1), y: +y.toFixed(1), r: +Math.sqrt(rx * ry).toFixed(1), a: +a.toFixed(3), look: 'grain-flat', fill: hx(fill), stroke: hx(fill), sw: 0,
+      grad: [hx(tone(fill, 0.028 * g)), hx(tone(fill, -0.022 * g))], rx: +rx.toFixed(1), ry: +ry.toFixed(1), rot: +(rot / deg).toFixed(1), note, ...extra }); };
+  if (t < TV.t0) {   // the hero shape: it IS the dot whenever it is (close to) a circle
+    const h = heroAt(t), wb = worldBody(h), sc = wb.map(p => camPt(K, p)), E = ellipseOf(sc);
+    let vis = 1; if (h.clipY != null) { const cl = clipAbove(wb, h.clipY); vis = cl.length > 2 ? Math.abs(area(cl)) / Math.abs(area(wb)) : 0; }
+    const fill = h.sweep && h.sweep.p >= 0.5 ? h.sweep.to : h.fill, round = 1 - smooth(0.03, 0.10, E.dev), asp = E.rx / E.ry;
+    const cw = centroid(wb), bg = fieldAt(t, cw), wiping = h.sweep && h.sweep.p > 0 && h.sweep.p < 1, same = hx(bg) === hx(fill);   // same colour as the field = no visible edge
+    dotEl(E.x, E.y, E.rx, E.ry, E.rot, round * vis * (same ? 0.2 : 1), fill, 'hero shape: ' + heroPhase(t) + (wiping ? ', colour wipe running' : ''),
+      { round: +(1 - E.dev).toFixed(3), clean: E.dev < 0.03 && asp < 1.06 && vis > 0.98 && !wiping && !same, vis: +vis.toFixed(3), bg: hx(bg) });
+  } else {           // the full stop: squeezes out of the dividing circle (8.30-8.46), then holds to the end
+    const S = tvStop(t), cy = S.c[1] + (S.fly ? 0 : S.r * S.land * 0.5), p = camPt(K, [S.c[0], cy]);
+    const rx = S.r * ks * (S.fly ? 1 : 1 + S.land), ry = S.r * ks * (S.fly ? 1 : 1 - S.land);
+    let vis = 1; if (S.fly && t > TV.t0 + 0.5 / FPS) for (const it of TV.items) { const c = tvCell(it, t), d = Math.hypot(S.c[0] - c.c[0], S.c[1] - c.c[1]);   // hidden while inside a cell
+      vis = Math.min(vis, clamp((d + S.r - c.r) / (2 * S.r))); }
+    dotEl(p[0], p[1], rx, ry, crot, vis, S.col, S.fly ? 'the dividing circle shrinking into the full stop (hidden inside the cells until ~8.40)' : 'full stop of 形变动画 (vermilion)',
+      { round: 1, clean: !S.fly && Math.abs(S.land) < 0.01, vis: +vis.toFixed(3), bg: hx(fieldAt(t, S.c)) });
+    const b = TV.box, cs = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(q => camPt(K, q)), c = camPt(K, [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]);
+    out.push({ id: 'title', type: 'rect', x: +c[0].toFixed(1), y: +c[1].toFixed(1), w: +((b[2] - b[0]) * ks).toFixed(1), h: +((b[3] - b[1]) * ks).toFixed(1), rot: +(crot / deg).toFixed(2),
+      a: +clamp((t - TV.m0) / (TV.done - TV.m0)).toFixed(3), fill: hx(TC), note: '形变动画 title block (ink box; a = build progress, 1 = fully formed)' });
+  }
+  const y = seaTop(t);   // the sunset horizon: vermilion sky / ultramarine sea colour edge (rises 2.6-3.1, floods up out of frame 3.98-4.40)
+  if (t >= WP.sea && y > -40 && y < H + 20) { const p0 = camPt(K, [-200, y]), p1 = camPt(K, [W + 200, y]), yAt = x => lerp(p0[1], p1[1], (x - p0[0]) / (p1[0] - p0[0]));
+    out.push({ id: 'horizon', type: 'line', x0: 0, y0: +yAt(0).toFixed(1), x1: W, y1: +yAt(W).toFixed(1), w: 2, a: 1, fill: hx(C.ultra), note: 'sea / sky colour edge (sunset horizon)' }); }
+  for (const i of [1, 2, 4, 5, 6]) { const r = fields[i].reg(t); if (!r || r === 'full') continue;   // an expanding field colour circle (iris)
+    const p = camPt(K, r.circle); out.push({ id: 'bloom', type: 'circle', x: +p[0].toFixed(1), y: +p[1].toFixed(1), r: +(r.circle[2] * ks).toFixed(1), a: 1, look: 'flat', fill: hx(fields[i].c), stroke: hx(fields[i].c), sw: 0,
+      note: 'colour field blooming out of the hero (iris wipe)' }); }
+  return out;
+}
+const gradK0 = t => (V5 && t >= TV.t0) ? 0 : 1 - smooth(8.1, 8.5, t);
+if (V5) window.linkAt = linkAtV5;
+
+window.renderAt = async (t) => {
+  t = clamp(t, 0, 9.999);
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.letterSpacing = '0px';
+  CAM = camAt(t); applyCam(ctx, CAM);
+  drawFields(t); applyCam(ctx, CAM);
+  drawHero(t);
+  drawEndRings(t);
+  drawLetters(t);
+  drawTagline(t);
+  drawEndDots(t);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+  finish(Math.round(t * FPS));
+};
+await document.fonts.load('500 20px "IBM Plex Mono"', '0123/'); await document.fonts.load('500 34px "HarmonyOS Sans SC"', WORDS.join('') + '一形万象');
+await document.fonts.load('600 40px "Outfit Morph"', 'morphe');
+if (V5) await document.fonts.load('500 30px "IBM Plex Mono"', 'SHAPE MORPH');
+await document.fonts.ready;
+await window.renderAt(0);
+window.__ready = true;
+})().catch(e => { console.error('INIT ERROR', e && e.stack || e); });
+</script>
+</body></html>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>07 · 液态流动 Liquid Motion — drop</title>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+@font-face { font-family: 'Fraunces Liquid'; src: url('/demos/07-liquid/assets/Fraunces-Liquid-72-900-Soft.ttf') format('truetype'); font-weight: 1 1000; font-display: block; }
+html, body { margin: 0; background: #000; overflow: hidden; width: 1920px; height: 1080px; }
+canvas#c { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+import { createEngine } from './js/engine.js';
+import { buildLetterSDF } from './js/textsdf.js';
+import { lookdev } from './js/lookdev.js';
+import { createFilm } from './js/scene.js';
+import { createType } from './js/type.js';
+import { linkElements } from './js/links.js';
+
+const W = 1920, H = 1080, FPS = 30;
+window.DEMO = { width: W, height: H, fps: FPS, duration: 10, motionBlur: { samples: 1, shutter: 0.5 } };
+const qs = new URLSearchParams(location.search);
+const LOOK = qs.has('look') ? +qs.get('look') : null;
+// reel v5 (?v5=1): the hero word becomes the style name 「液态流动」 (same liquid SDF engine), window.linkAt(t), ?nolink=ids
+const V5 = qs.get('v5') === '1';
+const NOLINK = new Set(V5 ? (qs.get('nolink') || '').split(',').map((x) => x.trim()).filter(Boolean) : []);
+const V5WORD = { word: '液态流动', family: '"Resource Han Rounded"', weight: 900, size: 300, tracking: 40, pad: 170, sigma: 6 };
+
+async function init() {
+  await document.fonts.load('900 100px "Fraunces Liquid"');
+  await document.fonts.load('400 40px "Instrument Serif"');
+  await document.fonts.load('italic 400 40px "Instrument Serif"');
+  await document.fonts.load('500 40px "Noto Serif SC"', '万物始于一滴');
+  await document.fonts.load('600 20px "Inter"');
+  if (V5) await document.fonts.load('900 300px "Resource Han Rounded"', V5WORD.word);
+  await document.fonts.ready;
+  const cues = await (await fetch('/demos/07-liquid/cues.json')).json();
+  const eng = V5 ? createEngine(document.getElementById('c'), W, H, { v5: true }) : createEngine(document.getElementById('c'), W, H);
+  // wordmark SDF
+  const sdf = V5 ? buildLetterSDF(V5WORD) : buildLetterSDF({ word: 'drop', family: '"Fraunces Liquid"', weight: 900, size: 400, tracking: 10, pad: 170, sigma: 10 });
+  eng.setSDF(sdf);
+  // place wordmark: centre of ink bbox at (960, 468)
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const l of sdf.letters) { x0 = Math.min(x0, l.bbox[0]); y0 = Math.min(y0, l.bbox[1]); x1 = Math.max(x1, l.bbox[2]); y1 = Math.max(y1, l.bbox[3]); }
+  // optical centre: x-height band dominates → centre between ascender top and baseline, shifted
+  const offX = 960 - (x0 + x1) / 2, offY = V5 ? 470 - (y0 + y1) / 2 : 452 - (y0 + sdf.baseY) / 2;   // v5: CJK ink box centred
+  const word = {
+    offX, offY, baseY: sdf.baseY + offY, bbox: [x0 + offX, y0 + offY, x1 + offX, y1 + offY],
+    letters: sdf.letters.map((l) => ({ ch: l.ch, px: l.pivot[0], py: l.pivot[1], sx0: l.pivot[0] + offX, sy0: l.pivot[1] + offY,
+      bbox: [l.bbox[0] + offX, l.bbox[1] + offY, l.bbox[2] + offX, l.bbox[3] + offY] })),
+  };
+  // query helpers on the letter SDFs (screen coords, rest pose)
+  word.sd = (i, x, y) => {
+    const tx = Math.round(x - offX), ty = Math.round(y - offY);
+    if (tx < 0 || ty < 0 || tx >= sdf.W || ty >= sdf.H) return 200;
+    return sdf.data[(ty * sdf.W + tx) * 4 + i];
+  };
+  word.bottomAt = (i, x) => { // lowest ink y in column x
+    for (let y = Math.round(word.letters[i].bbox[3]) + 4; y > word.letters[i].bbox[1]; y--) if (word.sd(i, x, y) < 0) return y;
+    return null;
+  };
+  if (V5) word.massY = (word.bbox[1] + word.bbox[3]) / 2;   // v5: the bar sits on the glyphs' vertical centre
+  window.__word = word;
+  const film = createFilm(cues, word, { v5: V5 });
+  window.__stateAt = (t) => film(t);
+  const type = createType(W, H, cues, word, { v5: V5 });
+  // v5 link elements: everything tagged with a hidden id (plus its '~' accessories) is dropped from the render state;
+  // the shadow and the floor reflection come from the same field, so they go with it
+  const hid = (e) => e.lk && e.lk.some((id) => NOLINK.has(id.replace('~', '')));
+  const strip = (S) => {
+    if (!NOLINK.size) return S;
+    S.balls = S.balls.filter((b) => !hid(b)); S.segs = S.segs.filter((b) => !hid(b));
+    if (NOLINK.has('dot') && S.ripDot) S.rip = { ...S.rip, amp: 0 };   // the drip's floor ripple rings go with it
+    return S;
+  };
+  if (V5) window.linkAt = (t) => linkElements(film(t), word);
+  // adaptive in-page motion blur: sub-shutter samples per frame (shutter 0.5 = 180 deg), more on the fast ranges
+  const SHUT = 0.5, FAST = [[0.12, 0.3, 20], [0.33, 1.05, 24], [1.2, 1.3, 16], [1.55, 2.95, 20], [3.1, 3.55, 20], [3.85, 4.75, 24],
+    [4.9, 5.7, 20], [6.18, 6.8, 24], [8.5, 9.0, 20]];
+  const MBQ = qs.has('mb') ? +qs.get('mb') : null;
+  window.__samplesAt = (t) => { if (MBQ !== null) return MBQ; for (const [a, b, n] of FAST) if (t >= a && t <= b) return n; return 10; };
+  window.renderAt = async (t) => {
+    const N = LOOK !== null ? 1 : Math.max(1, window.__samplesAt(t));
+    const Ss = [];
+    for (let s = 0; s < N; s++) {
+      // round 1: shorter shutter on the macro P1 contact frames so the fall and the squash don't double-expose
+      const sh = t > 0.345 && t < 0.445 ? 0.2 : (t > 6.385 && t < 6.585 ? 0.25 : SHUT);   // r2: crisp split on frames 192-197
+      const off = t > 0.39 && t < 0.41 ? 0.0 : -0.5;   // contact frame: shutter opens AT contact -> the squash, no ghost egg
+      const ts = N > 1 ? Math.max(0, t + sh / FPS * ((s + 0.5) / N + off)) : t;
+      const S = LOOK !== null ? lookdev(ts, LOOK, word) : (V5 ? strip(film(ts)) : film(ts));
+      if (qs.has('dbg')) S.dbg = +qs.get('dbg');
+      S.frame = Math.round(t * FPS); S.mbw = N > 1 ? sh / N : 0;   // shutter fraction between samples (edge blur)
+      Ss.push(S);
+    }
+    const Sc = N > 1 ? film(t) : (V5 ? film(t) : Ss[0]);
+    type.draw(t, Sc, LOOK);
+    Ss[Math.floor(N / 2)] = Object.assign(Ss[Math.floor(N / 2)], { frame: Math.round(t * FPS), bloom: Sc.bloom, flash: Sc.flash });
+    eng.render(Ss, type.canvas);
+  };
+  window.__ready = true;
+}
+init().catch((e) => { console.error(e.stack || String(e)); document.title = 'ERR'; });
+</script>
+</body>
+</html>

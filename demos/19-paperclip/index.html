@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<script src="/node_modules/d3/dist/d3.min.js"></script>
+<script src="/node_modules/topojson-client/dist/topojson-client.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#1D2731}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;overflow:hidden;
+  background:radial-gradient(120% 90% at 35% 50%,#27333F 0%,#1D2731 55%,#161E26 100%)}
+#world{position:absolute;left:0;top:0;width:2400px;height:5900px;transform-origin:0 0}
+#bezel{position:absolute;left:-130px;top:-130px;width:2660px;height:6160px;border-radius:330px;background:#0E141A;
+  box-shadow:0 0 0 46px #F7F9FB,0 90px 220px 60px rgba(4,8,12,.55)}
+.btn{position:absolute;background:#F7F9FB;border-radius:26px}
+#screen{position:absolute;left:0;top:0;width:2400px;height:5900px;border-radius:210px;overflow:hidden;background:#E9EEF2}
+#dots{position:absolute;left:0;top:0;width:2400px;height:5900px;
+  background-image:radial-gradient(circle,#C5CFD8 2.3px,transparent 2.9px);background-size:48px 48px;background-position:0 0}
+.a{position:absolute;left:0;top:0;will-change:auto}
+.zh{font-family:'Alibaba PuHuiTi',sans-serif}
+.in{font-family:'Inter',sans-serif;font-feature-settings:'tnum' 1,'case' 1}
+.stk{position:absolute;left:0;top:0;transform-origin:50% 50%}
+.mask{position:absolute;overflow:hidden}
+.tile{position:absolute;left:0;top:0;border-radius:12px;background:#F7F9FB;box-shadow:inset 0 0 0 2px #CDD6DE}
+.tile b{position:absolute;left:0;right:0;top:34px;text-align:center;font:700 40px/1 'Inter';letter-spacing:-.01em}
+.tile i{position:absolute;left:11px;top:9px;font:500 15px/1 'Inter';font-style:normal}
+.chip{position:absolute;left:0;top:0;border-radius:10px;overflow:hidden}
+.chip b{position:absolute;left:0;right:0;text-align:center;font-family:'Inter';font-weight:700;letter-spacing:-.01em}
+.badge{position:absolute;width:62px;height:62px;border-radius:11px;background:#25313D;color:#fff}
+.badge b{position:absolute;left:0;right:0;top:15px;text-align:center;font:800 30px/1 'Inter'}
+.badge i{position:absolute;left:0;right:0;top:72px;text-align:center;font:700 24px/1 'Alibaba PuHuiTi';font-style:normal;color:#5E6D7B}
+#hud,#end{position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none}
+</style></head>
+<body><div id="stage">
+  <svg width="0" height="0" style="position:absolute"><filter id="mbf" x="-6%" y="-6%" width="112%" height="112%" color-interpolation-filters="sRGB" primitiveUnits="userSpaceOnUse"><feImage id="zmap" x="-115" y="-65" width="2150" height="1210" preserveAspectRatio="none" result="map"/><feOffset id="mo0" in="SourceGraphic" dx="0" dy="0" result="o0"/><feDisplacementMap id="md0" in="o0" in2="map" scale="0" xChannelSelector="R" yChannelSelector="G" result="d0"/><feOffset id="mo1" in="SourceGraphic" dx="0" dy="0" result="o1"/><feDisplacementMap id="md1" in="o1" in2="map" scale="0" xChannelSelector="R" yChannelSelector="G" result="d1"/><feOffset id="mo2" in="SourceGraphic" dx="0" dy="0" result="o2"/><feDisplacementMap id="md2" in="o2" in2="map" scale="0" xChannelSelector="R" yChannelSelector="G" result="d2"/><feOffset id="mo3" in="SourceGraphic" dx="0" dy="0" result="o3"/><feDisplacementMap id="md3" in="o3" in2="map" scale="0" xChannelSelector="R" yChannelSelector="G" result="d3"/><feComposite in="d0" in2="d1" operator="arithmetic" k2=".5" k3=".5" result="m01"/><feComposite in="d2" in2="d3" operator="arithmetic" k2=".5" k3=".5" result="m23"/><feComposite in="m01" in2="m23" operator="arithmetic" k2=".5" k3=".5" result="mm"/><feGaussianBlur id="mbg" in="mm" stdDeviation="0 0" edgeMode="duplicate"/></filter></svg>
+  <svg width="0" height="0" style="position:absolute"><filter id="pblur" x="-25%" y="-35%" width="150%" height="170%"><feGaussianBlur id="pblurG" stdDeviation="0 0"/></filter></svg>
+  <div id="cam" style="position:absolute;left:0;top:0;width:1920px;height:1080px"><div id="world"><div id="bezel"></div><div id="screen"><div id="dots"></div></div></div></div>
+  <div id="fx" style="position:absolute;left:0;top:0;width:1920px;height:1080px;pointer-events:none"></div>
+  <svg id="endsvg" class="a" width="1920" height="1080" style="position:absolute"></svg>
+  <div id="end"></div><div id="hud"></div>
+</div>
+<script type="module">
+const ROOT='/demos/19-paperclip/';
+const cues=await fetch(ROOT+'cues.json').then(r=>r.json());
+const meta=await fetch(ROOT+'assets/stickers/meta.json').then(r=>r.json());
+const EV=cues.ev, WW=cues.world.w, WH=cues.world.h;
+window.DEMO={width:1920,height:1080,fps:30,duration:10,motionBlur:{samples:1,shutter:0.5}};
+// REEL v5 flags (?v5=1 [&nolink=dot,title,...]); without v5 every code path below is the v4 film, unchanged
+const QS=new URLSearchParams(location.search), V5=QS.get('v5')==='1', NOLINK=new Set(V5?(QS.get('nolink')||'').split(',').map(s=>s.trim()).filter(Boolean):[]);
+// v5 time-warp source s -> film t: the pre-fly title hold is stretched by V5D (smoothstep over [V5A,V5B]); s>=V5B -> t=s-V5D (12 frames exactly)
+const V5D=.4,V5A=.55,V5B=1.6;
+const V5W=s=>{if(!V5||s<=V5A)return s;if(s>=V5B)return s-V5D;const u=(s-V5A)/(V5B-V5A);return s-V5D*u*u*(3-2*u);};
+if(V5)window.DEMO.duration=10+V5D;
+// ---------- helpers ----------
+const clamp=(x,a=0,b=1)=>x<a?a:x>b?b:x, lerp=(a,b,u)=>a+(b-a)*u, P=(t,a,d)=>clamp((t-a)/d);
+const oC=u=>1-Math.pow(1-u,3), oQ=u=>1-Math.pow(1-u,4), oX=u=>u>=1?1:1-Math.pow(2,-10*u), iQ=u=>u*u,
+  ioC=u=>u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2, ioS=u=>-(Math.cos(Math.PI*u)-1)/2,
+  oB=(u,s=1.7)=>1+(s+1)*Math.pow(u-1,3)+s*Math.pow(u-1,2);
+function bez(x1,y1,x2,y2){return u=>{if(u<=0)return 0;if(u>=1)return 1;let t=u;for(let i=0;i<8;i++){const cx=3*x1*t*(1-t)**2+3*x2*t*t*(1-t)+t**3-u;const d=3*x1*(1-t)**2+6*(x2-x1)*t*(1-t)+3*(1-x2)*t*t;if(Math.abs(d)<1e-6)break;t=clamp(t-cx/d);}return 3*y1*t*(1-t)**2+3*y2*t*t*(1-t)+t**3;};}
+const eFly=bez(.62,0,.22,1), ePull=bez(.5,0,.08,1);
+const wob=(dt,f=5,k=11)=>dt<0?0:Math.exp(-k*dt)*Math.cos(2*Math.PI*f*dt);
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const mixc=(a,b,u)=>{const A=a.match(/\w\w/g).map(h=>parseInt(h,16)),B=b.match(/\w\w/g).map(h=>parseInt(h,16));return`rgb(${A.map((v,i)=>Math.round(lerp(v,B[i],u))).join(',')})`;};
+const INK='25313D',MID='8C9AA8',OR='FF5A36',CARD='F7F9FB';
+const world=document.getElementById('world'), screen=document.getElementById('screen'), hud=document.getElementById('hud'), endL=document.getElementById('end');
+const el=(tag,cls,parent,css,html)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(css)e.style.cssText=css;if(html!=null)e.innerHTML=html;(parent||screen).appendChild(e);return e;};
+const SVGNS='http://www.w3.org/2000/svg';
+const sv=(tag,attrs,parent)=>{const e=document.createElementNS(SVGNS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);parent.appendChild(e);return e;};
+const U=[]; // updaters(t)
+const shadow=(lift,a=.26)=>`drop-shadow(0 ${6+34*lift}px ${10+34*lift}px rgba(22,34,46,${a-0.08*lift}))`;
+// sticker slap: returns {s, r, lift, o}
+function slap(t,land,dur=.2,amp=.3){const p=(t-(land-dur))/dur;if(p<0)return{o:0,s:1+amp,r:6,lift:1};
+  if(p<1){const L=1-iQ(p);return{o:clamp(p*5),s:1+amp*L,r:6*L,lift:L};}
+  const w=wob(t-land,4.5,10);return{o:1,s:1-.035*w,r:-.8*w,lift:0};}
+// ---------- camera ----------
+const CAM=cues.cam; const seg=[]; let TRK=null; // R2PATCH
+const rotv=(x,y,r)=>{const a=r*Math.PI/180,c=Math.cos(a),s=Math.sin(a);return[x*c-y*s,x*s+y*c];};
+const projC=(C,wx,wy)=>{const[a,b]=rotv((wx-C.x)*C.z,(wy-C.y)*C.z,C.r||0);return[960+a,540+b];};
+const camFrom=(ax,ay,px,py,z,r)=>{const[a,b]=rotv((px-960)/z,(py-540)/z,-r);return{x:ax-a,y:ay-b,z,r};};
+const EASE={fly:eFly,pull:ePull,pullA:bez(.3,0,.1,1),pullB:bez(.42,0,.22,1),hold:u=>u*u*(3-u)/2};
+for(let i=1;i<CAM.length;i++){const a=CAM[i-1],b=CAM[i];
+  seg.push({a,b,I:(b.move==='fly'||b.move==='pull')?d3.interpolateZoom.rho(b.move==='pull'?1.25:0.85)([a.x,a.y,1920/a.z],[b.x,b.y,1920/b.z]):null});}
+function cam(t){if(t<=CAM[0].t)return{x:CAM[0].x,y:CAM[0].y,z:CAM[0].z,r:0};
+  for(const s of seg){if(t<=s.b.t){if(s.b.move==='track'&&TRK)return TRK(t);const u=(t-s.a.t)/(s.b.t-s.a.t),ra=s.a.r||0,rb=s.b.r||0;
+    if(s.b.anchor){const e=EASE[s.b.move](u),[ax,ay]=s.b.anchor,A=projC(s.a,ax,ay),B=projC(s.b,ax,ay);   // anchor point travels in screen space
+      const z=Math.exp(lerp(Math.log(s.a.z),Math.log(s.b.z),e)),r=lerp(ra,rb,e)+(s.b.swing||0)*Math.sin(Math.PI*e);
+      return camFrom(ax,ay,lerp(A[0],B[0],e),lerp(A[1],B[1],e),z,r);}
+    if(!s.I){const e=ioS(u);return{x:lerp(s.a.x,s.b.x,e),y:lerp(s.a.y,s.b.y,e),z:Math.exp(lerp(Math.log(s.a.z),Math.log(s.b.z),e)),r:lerp(ra,rb,e)};}
+    const v=s.I(EASE[s.b.move](u));return{x:v[0],y:v[1],z:1920/v[2],r:0};}}
+  const l=CAM[CAM.length-1];return{x:l.x,y:l.y,z:l.z,r:l.r||0};}
+// phone lift (sticker peel-up during pull stage 2) + slap contact, camera jolts on impacts
+function liftAt(t){const[a,b]=EV.lift;if(t<a||t>=b)return 0;return t<b-.07?oC(P(t,a,.1)):1-iQ(P(t,b-.07,.07));}
+const jolt=t=>8*wob(t-EV.phone_land,4,16)+3*wob(t-EV.first_lit,4,18)+6*wob(t-EV.lift[1],4,16)+4*wob(t-EV.slam,4,16);
+function worldM(t,C){const L=liftAt(t),ls=1+.04*L-.012*wob(t-EV.lift[1],5,14),J=jolt(t),Pc=projC(C,1200,2950);
+  const k=ls*C.z,a=(C.r||0)*Math.PI/180,[bx,by]=rotv(-C.x*C.z,-C.y*C.z,C.r||0);
+  return{m:[k*Math.cos(a),k*Math.sin(a),-k*Math.sin(a),k*Math.cos(a),ls*(960+bx)+(1-ls)*Pc[0],ls*(540+by)+(1-ls)*Pc[1]+J],ls,L,J,Pc};}
+const mapW=(M,x,y)=>[M[0]*x+M[2]*y+M[4],M[1]*x+M[3]*y+M[5]];
+// ---------- bezel details ----------
+el('div','btn',world,'left:2556px;top:1180px;width:44px;height:420px');
+el('div','btn',world,'left:-200px;top:1000px;width:44px;height:300px');
+el('div','btn',world,'left:-200px;top:1380px;width:44px;height:300px');
+el('div','a',screen,'left:1166px;top:40px;width:68px;height:68px;border-radius:50%;background:#0E141A');
+el('div','a in',screen,'left:150px;top:44px;font:700 52px/1 Inter;color:#25313D','10:00');
+el('div','a',screen,'left:2020px;top:52px;width:88px;height:42px;border-radius:10px;box-shadow:inset 0 0 0 5px #25313D;',
+ '<div style="position:absolute;left:9px;top:9px;width:56px;height:24px;border-radius:4px;background:#25313D"></div><div style="position:absolute;left:92px;top:14px;width:8px;height:14px;border-radius:0 4px 4px 0;background:#25313D"></div>');
+{const g=el('div','a',screen,'left:1880px;top:48px;width:110px;height:50px');[14,24,34,46].forEach((h,i)=>el('div','a',g,`left:${i*22}px;top:${50-h}px;width:14px;height:${h}px;border-radius:3px;background:#25313D`));}
+el('div','a',screen,'left:950px;top:5842px;width:500px;height:18px;border-radius:9px;background:#25313D;z-index:40');
+const sheen=el('div','a',screen,'z-index:95;left:0;top:0;width:1000px;height:9000px;transform-origin:50% 50%;pointer-events:none;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.7) 50%,rgba(255,255,255,0))');
+U.push(t=>{const u=P(t,EV.aha-.06,.38);sheen.style.opacity=u>0&&u<1?1:0;sheen.style.transform=`translate(${lerp(-1400,3000,ioS(u))}px,700px) rotate(24deg)`;});
+// ---------- A: title ----------
+const A={x:340};
+const kick=el('div','a zh',screen,`left:${A.x}px;top:372px;font:700 30px/1 'Alibaba PuHuiTi';color:#25313D;letter-spacing:.04em;white-space:nowrap`,
+ `<span style="display:inline-block;width:20px;height:20px;background:#FF5A36;margin-right:16px;vertical-align:-1px"></span>硬核拆解 <span style="color:#8C9AA8;font:600 26px Inter;letter-spacing:.16em;margin-left:14px">EXPLAINER · NO.001</span>`);
+const L1m=el('div','mask',screen,`left:${A.x-10}px;top:440px;width:1000px;height:150px`); const L1=el('div','a zh',L1m,`left:10px;top:4px;font:900 124px/1.15 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;letter-spacing:-.01em`,'一部手机里，');
+const L2m=el('div','mask',screen,`left:${A.x-10}px;top:596px;width:1120px;height:160px`);
+const mark=el('div','a',L2m,`left:${10+124*2}px;top:112px;height:30px;width:${124*5}px;background:#FF5A36;transform-origin:0 50%`);
+const L2=el('div','a zh',L2m,`left:10px;top:4px;font:900 124px/1.15 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;letter-spacing:-.01em`,'藏着多少种元素？');
+const subEn=el('div','a in',screen,`left:${A.x}px;top:800px;font:600 30px/1 Inter;letter-spacing:.14em;color:#8C9AA8;white-space:nowrap`,'HOW MANY ELEMENTS HIDE INSIDE ONE PHONE?');
+const rule=el('div','a',screen,`left:${A.x}px;top:870px;width:600px;height:3px;background:#25313D;transform-origin:0 50%`);
+const aNote=el('div','a zh',screen,`left:${A.x}px;top:900px;font:500 28px/1.5 'Alibaba PuHuiTi';color:#5E6D7B;white-space:nowrap`,'拆开一部智能手机，逐一对照元素周期表');
+U.push(t=>{const k=oC(P(t,EV.kicker,.35));kick.style.opacity=k;kick.style.transform=`translateY(${(1-k)*18}px)`;
+ L1.style.transform=`translateY(${(1-oX(P(t,EV.title1,.5)))*150}px)`;L2.style.transform=`translateY(${(1-oX(P(t,EV.title2,.5)))*160}px)`;
+ mark.style.transform=`scaleX(${ioC(P(t,EV.marker[0],EV.marker[1]-EV.marker[0]))})`;
+ const s=oC(P(t,EV.sub_en,.4));subEn.style.opacity=s;subEn.style.transform=`translateX(${(1-s)*-30}px)`;
+ rule.style.transform=`scaleX(${oQ(P(t,EV.sub_en+.08,.5))})`;const n=oC(P(t,EV.sub_en+.16,.4));aNote.style.opacity=n;aNote.style.transform=`translateY(${(1-n)*14}px)`;});
+// ---------- B: phone + parts ----------
+const pblurG=document.getElementById('pblurG');
+const SLOTS=[...Array(10)].map((_,i)=>el('div','a',screen,`left:${A.x+i*58}px;top:986px;width:46px;height:46px;border-radius:9px;border:2.5px dashed #AEBAC5;opacity:0;z-index:3`));
+U.push(t=>SLOTS.forEach((d,i)=>{const u=P(t,EV.slots[0]+i*.028,.22);d.style.opacity=.85*clamp(u*3);d.style.transform=`scale(${u>0?oB(u,1.6):.5})`;}));
+const stickerImg=(name,w,h,z=5)=>{const i=el('img','stk',screen,`width:${w}px;height:${h}px;z-index:${z}`);i.src=ROOT+'assets/stickers/'+name+'.png';return i;};
+const phone=stickerImg('phone',meta.phone.w,meta.phone.h,20);
+const PH0={x:1690,y:660,s:.92,r:-3}, PH1={x:1200,y:1835,s:.8,r:1.5};
+const leadSvg=sv('svg',{width:WW,height:WH,style:'position:absolute;left:0;top:0;z-index:30;overflow:visible'},screen);
+function phoneAt(t){const [a,b]=EV.phone_fly;const u=eFly(P(t,a,b-a));const arc=Math.sin(Math.PI*u);
+  return{x:lerp(PH0.x,PH1.x,u)+arc*120,y:lerp(PH0.y,PH1.y,u),s:lerp(PH0.s,PH1.s,u),r:lerp(PH0.r,PH1.r,u)+arc*-4,lift:arc};}
+const magnetSVG=`<svg viewBox="-130 -140 260 270" width="240" height="250" style="overflow:visible"><g stroke="#F7F9FB" stroke-width="26" stroke-linejoin="round" paint-order="stroke">
+<path d="M -92 -90 L -28 -90 L -28 10 A 28 28 0 0 0 28 10 L 28 -90 L 92 -90 L 92 10 A 92 92 0 0 1 -92 10 Z" fill="#25313D"/></g>
+<rect x="-92" y="-90" width="64" height="44" fill="#FF5A36"/><rect x="28" y="-90" width="64" height="44" fill="#FF5A36"/>
+<text x="-60" y="-58" fill="#fff" font-family="Inter" font-weight="800" font-size="26" text-anchor="middle">N</text><text x="60" y="-58" fill="#fff" font-family="Inter" font-weight="800" font-size="26" text-anchor="middle">S</text>
+<path d="M -70 6 A 70 70 0 0 0 -30 66" fill="none" stroke="#8C9AA8" stroke-width="7" stroke-linecap="round"/></svg>`;
+const socSVG=`<svg viewBox="-125 -125 250 250" width="250" height="250" style="overflow:visible"><defs>
+<linearGradient id="socDie" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#303740"/><stop offset=".5" stop-color="#171B20"/><stop offset="1" stop-color="#0B0E11"/></linearGradient>
+<linearGradient id="socSub" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#358A58"/><stop offset="1" stop-color="#1F5F3B"/></linearGradient>
+<linearGradient id="socSheen" x1="0" y1="0" x2="1" y2="1"><stop offset=".28" stop-color="#fff" stop-opacity="0"/><stop offset=".46" stop-color="#fff" stop-opacity=".18"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+<g stroke="#F7F9FB" stroke-width="24" stroke-linejoin="round" paint-order="stroke"><rect x="-108" y="-108" width="216" height="226" rx="16" fill="#123A25"/></g>
+<rect x="-108" y="-108" width="216" height="216" rx="16" fill="url(#socSub)"/>
+<g fill="none" stroke="#4FA776" stroke-width="2.2" opacity=".55"><path d="M-96 -40 H-84 L-78 -46 M-96 -20 H-80 M-96 0 H-84 L-78 6 M-96 20 H-80 M-96 40 H-84 L-78 34 M-40 -96 V-84 L-46 -78 M-20 -96 V-80 M0 -96 V-84 L6 -78 M20 -96 V-80 M40 -96 V-84 L34 -78"/></g>
+<g fill="#D7B25A"><circle cx="-94" cy="-94" r="5"/><circle cx="94" cy="-94" r="5"/><circle cx="-94" cy="94" r="5"/><circle cx="94" cy="94" r="5"/></g>
+<g>${[-60,-40,-20,0,20,40,60].map(x=>`<rect x="${x-7}" y="84" width="14" height="8" rx="1.5" fill="#B98C5F"/><rect x="${x-7}" y="84" width="3.5" height="8" fill="#D9DEE3"/><rect x="${x+3.5}" y="84" width="3.5" height="8" fill="#D9DEE3"/>`).join('')}
+${[-50,-30,-10,10,30,50].map(y=>`<rect x="84" y="${y-7}" width="8" height="14" rx="1.5" fill="#2A2F35"/><rect x="84" y="${y-7}" width="8" height="3.5" fill="#D9DEE3"/><rect x="84" y="${y+3.5}" width="8" height="3.5" fill="#D9DEE3"/>`).join('')}</g>
+<rect x="-74" y="-74" width="148" height="148" rx="9" fill="#0A0D10" transform="translate(0 4)"/>
+<rect x="-74" y="-74" width="148" height="148" rx="9" fill="url(#socDie)" stroke="#434C56" stroke-width="2"/>
+<circle cx="-56" cy="-56" r="6" fill="#262C33" stroke="#4A535D" stroke-width="1.5"/>
+<g fill="#8A96A2" font-family="Inter" text-anchor="middle"><text x="0" y="-12" font-weight="900" font-size="34" letter-spacing="3">NEXA</text>
+<text x="0" y="16" font-weight="700" font-size="19" letter-spacing="1.5">N9 PRO</text><text x="0" y="40" font-weight="600" font-size="13" letter-spacing="1.2">2437 · 3nm</text>
+<text x="0" y="58" font-weight="600" font-size="11" letter-spacing="1.2" fill="#6D7884">TWN 0K8F2A</text></g>
+<rect x="-74" y="-74" width="148" height="148" rx="9" fill="url(#socSheen)"/></svg>`;
+const RE=new Set(['Sc','Y','La','Ce','Pr','Nd','Sm','Eu','Gd','Tb','Dy','Ho','Er','Tm','Yb','Lu']);
+const ZH={In:'铟',Li:'锂',Co:'钴',Si:'硅',Ga:'镓',Cu:'铜',Sn:'锡',Au:'金',Nd:'钕',Pr:'镨'};
+const PARTS=[
+ {k:'battery',x:785,y:1625,s:.86,r:-4,an:[700,1650],end:[560,1650],side:'L',zh:'电池',en:'BATTERY',els:['Li','Co']},
+ {k:'pcb',x:1640,y:1615,s:.86,r:3,an:[1700,1640],end:[1852,1640],side:'R',zh:'主板',en:'MAINBOARD',els:['Cu','Sn','Au']},
+ {k:'soc',x:775,y:2130,s:.96,r:-6,an:[728,2186],end:[560,2186],side:'L',zh:'芯片',en:'CHIP',els:['Si','Ga']},
+ {k:'magnet',x:1650,y:2135,s:1.08,r:-3,an:[1660,2140],end:[1852,2140],side:'R',zh:'磁铁',en:'SPEAKER MAGNET',els:['Nd','Pr']},
+ {k:'phone',x:1200,y:1885,an:[1364,1885],end:[1852,1885],side:'R',zh:'屏幕',en:'DISPLAY',els:['In']}];
+PARTS.forEach((p,i)=>{
+ if(p.k==='phone'){p.node=null;}else if(p.k==='magnet'){p.node=el('div','stk',screen,'width:240px;height:250px;z-index:6',magnetSVG);p.w=240;p.h=250;}
+ else if(p.k==='soc'){p.node=el('div','stk',screen,'width:250px;height:250px;z-index:6',socSVG);p.w=250;p.h=250;}
+ else{p.node=stickerImg(p.k,meta[p.k].w,meta[p.k].h,6);p.w=meta[p.k].w;p.h=meta[p.k].h;}
+ p.land=EV.parts[i]; p.lt=EV.leaders[i];
+ const pts=p.side==='D'?[p.an,p.end]:[p.an,[p.end[0],p.end[1]]];
+ p.line=sv('path',{d:'M'+pts.map(q=>q.join(' ')).join(' L'),fill:'none',stroke:'#25313D','stroke-width':4,'stroke-linecap':'round',pathLength:1,'stroke-dasharray':'1 1'},leadSvg);
+ p.dot=sv('circle',{cx:p.an[0],cy:p.an[1],r:11,fill:'#25313D',stroke:'#F7F9FB','stroke-width':5},leadSvg);
+ const lab=el('div','a',screen,'z-index:31');p.lab=lab;
+ const nb=p.els.length, bw=nb*62+(nb-1)*12;
+ const tw=el('div','a zh',lab,`font:900 50px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap`,p.zh);
+ const te=el('div','a in',lab,`font:600 17px/1 Inter;letter-spacing:.2em;color:#8C9AA8;white-space:nowrap`,p.en);
+ p.badges=p.els.map((s,j)=>{const b=el('div','badge',lab,`background:${RE.has(s)?'#FF5A36':'#25313D'}`,`<b>${s}</b><i>${ZH[s]}</i>`);return b;});
+ if(p.side==='L'){lab.style.left=(p.end[0]-20)+'px';lab.style.top=(p.end[1]-80)+'px';tw.style.cssText+=';right:0;top:0;';te.style.cssText+=';right:0;top:60px';
+   p.badges.forEach((b,j)=>{b.style.left=(-bw+j*74)+'px';b.style.top='94px';});
+   tw.style.left='auto';te.style.left='auto';tw.style.right='0px';te.style.right='0px';}
+ else if(p.side==='R'){lab.style.left=(p.end[0]+20)+'px';lab.style.top=(p.end[1]-80)+'px';te.style.top='60px';p.badges.forEach((b,j)=>{b.style.left=(j*74)+'px';b.style.top='94px';});}
+ else{lab.style.left=(p.end[0])+'px';lab.style.top=(p.end[1]+4)+'px';tw.style.left='-126px';tw.style.top='14px';te.style.left='-126px';te.style.top='72px';p.badges.forEach(b=>{b.style.left='26px';b.style.top='14px';});}
+ p.tw=tw;p.te=te;});
+// right-anchored label helper for side L (wrapper width 0 → use right via translate)
+PARTS.filter(p=>p.side==='L').forEach(p=>{p.lab.style.width='0px';});
+U.push(t=>{
+ const ph=phoneAt(t),land=EV.phone_land,pre=t<land,he=iQ(P(t,0,land)),sq=pre?0:wob(t-land,4,12);
+ const sl={y:pre?-420*(1-he):0,r:pre?-14*(1-he):-.8*sq,s:pre?1+.18*(1-he):1,sx:1+.04*sq,sy:1-.05*sq,lift:pre?1-he:0};
+ const lift=Math.max(ph.lift*.6,sl.lift);
+ phone.style.opacity=1;
+ const fl=(1-oC(P(t,EV.phone_fly[0]-.05,.3)))*oC(P(t,.3,.5)),fy=Math.sin((t-.3)*2.6)*9*fl,fr=Math.sin((t-.3)*2.0+.4)*1.3*fl;
+ phone.style.transform=`translate(${ph.x-meta.phone.w/2}px,${ph.y-meta.phone.h/2-fy+sl.y}px) rotate(${ph.r+sl.r+fr}deg) scale(${ph.s*sl.s*sl.sx},${ph.s*sl.s*sl.sy})`;
+ {const v=pre?420*2*(t/land)/land/30*1.06:0,sg=v*.7*SH/MBN/(ph.s*sl.s*1.06);pblurG.setAttribute('stdDeviation',`${(sg*.25).toFixed(2)} ${sg.toFixed(2)}`);
+  phone.style.filter=(sg>.3?'url(#pblur) ':'')+shadow(Math.min(1,lift+.14*fl*(.5+.5*Math.sin((t-.3)*2.6))));}
+ PARTS.forEach((p,i)=>{
+  if(p.node){const t0=p.land-.44;const u=P(t,t0,.44);
+   if(t<t0){p.node.style.opacity=0;}else{const src=phoneAt(t0);const e=oC(u);const arc=Math.sin(Math.PI*u);
+    const x=lerp(src.x,p.x,e), y=lerp(src.y,p.y,e)-arc*60; const w=wob(t-p.land,4,9);
+    const s=lerp(.45,p.s,oB(u,1.2))*(1-.03*w), r=lerp(i%2?-18:16,p.r,e)+w*-1.2;
+    p.node.style.opacity=clamp(u*6);p.node.style.transform=`translate(${x-p.w/2}px,${y-p.h/2}px) rotate(${r}deg) scale(${s})`;
+    p.node.style.filter=shadow(u<1?.8*(1-e)+.2*arc:0);}}
+  const lu=P(t,p.lt,.28);p.line.setAttribute('stroke-dashoffset',1-oC(lu));
+  const du=P(t,p.lt-.04,.22);p.dot.setAttribute('r',11*oB(du,2.2));p.dot.style.opacity=du>0?1:0;
+  const tu=oC(P(t,p.lt+.06,.24));const dir=p.side==='L'?1:p.side==='R'?-1:0;
+  p.tw.style.opacity=tu;p.te.style.opacity=tu;p.tw.style.transform=`translateX(${dir*(1-tu)*24}px)`;p.te.style.transform=`translateX(${dir*(1-tu)*24}px)`;
+  p.badges.forEach((b,j)=>{const bu=P(t,p.lt+.10+j*.04,.22);b.style.opacity=bu>0&&!(b._det!=null&&t>=b._det)?1:0;b.style.transform=`scale(${bu>0?oB(bu,2):0})`;});
+ });});
+// ---------- C: periodic table ----------
+const SYM='H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og'.split(' ');
+function rc(Z){if(Z===1)return[0,0];if(Z===2)return[0,17];if(Z<=4)return[1,Z-3];if(Z<=10)return[1,Z+7];if(Z<=12)return[2,Z-11];if(Z<=18)return[2,Z-1];
+ if(Z<=36)return[3,Z-19];if(Z<=54)return[4,Z-37];if(Z<=56)return[5,Z-55];if(Z<=71)return[7,Z-55];if(Z<=86)return[5,Z-69];if(Z<=88)return[6,Z-87];if(Z<=103)return[8,Z-87];return[6,Z-101];}
+const CATS=[{k:'tm',zh:'过渡金属',en:'TRANSITION METALS',els:'Ti V Cr Mn Fe Co Ni Cu Zn Zr Nb Mo Ru Rh Pd Ag Cd Hf Ta W Ir Pt Au'},
+ {k:'re',zh:'稀土元素',en:'RARE EARTHS',els:'Sc Y La Ce Pr Nd Sm Eu Gd Tb Dy Ho Er Tm Yb Lu'},
+ {k:'pm',zh:'主族金属与类金属',en:'POST-TRANSITION METALS & METALLOIDS',els:'Al Ga In Sn Pb Bi B Si Ge As Sb Te'},
+ {k:'nm',zh:'非金属',en:'NON-METALS',els:'H C N O F P S Cl Se Br I'},
+ {k:'am',zh:'碱金属与碱土金属',en:'ALKALI & ALKALINE-EARTH METALS',els:'Li Na K Be Mg Ca Sr Ba'}];
+CATS.forEach(c=>{c.list=c.els.split(' ').map(s=>SYM.indexOf(s)+1).sort((a,b)=>a-b);});
+const USED=new Map();CATS.forEach((c,ci)=>c.list.forEach((Z,j)=>USED.set(Z,{ci,j})));
+const TP=112,TS=104,TX=196,TY=2620,FG=36;
+const tXY=Z=>{const[r,c]=rc(Z);return[TX+c*TP,r<7?TY+r*TP:TY+7*TP+FG+(r-7)*TP];};
+const FIRST=['In','Li','Co','Si','Ga','Cu','Sn','Au','Nd','Pr'].map(s=>SYM.indexOf(s)+1);
+const R1=rng(19);const rest=[...USED.keys()].filter(Z=>!FIRST.includes(Z)).map(Z=>{const[r,c]=rc(Z);return{Z,k:c+.45*r+R1()*2.2};}).sort((a,b)=>a.k-b.k).map(o=>o.Z);
+const litT=new Map();FIRST.forEach(Z=>litT.set(Z,EV.first_lit));
+rest.forEach((Z,i)=>litT.set(Z,lerp(EV.cascade[0],EV.cascade[1],1-Math.cbrt(1-(i+1)/rest.length))));   // count = 10+60*easeOutCubic(p)
+const tiles=[];
+for(let Z=1;Z<=118;Z++){const[x,y]=tXY(Z);const d=el('div','tile',screen,`width:${TS}px;height:${TS}px;z-index:8`,`<i>${Z}</i><b>${SYM[Z-1]}</b>`);
+ const[r,c]=rc(Z);tiles.push({Z,x,y,d,delay:(c+r*1.4)*.018,lt:litT.get(Z),re:RE.has(SYM[Z-1]),b:d.querySelector('b'),i:d.querySelector('i')});}
+[['57–71',5],['89–103',6]].forEach(([s,r])=>{const d=el('div','tile',screen,`width:${TS}px;height:${TS}px;z-index:8;background:transparent;box-shadow:inset 0 0 0 2px #CDD6DE`,`<b style="font:600 19px/1 Inter;top:43px;color:#8C9AA8">${s}</b>`);tiles.push({Z:0,x:TX+2*TP,y:TY+r*TP,d,delay:(2+r*1.4)*.018});});
+// ---------- graphic match: the ten teardown badges peel off, ride the camera down and become the first ten tiles ----------
+const FLY=[];{let k=0;PARTS.forEach(p=>p.badges.forEach((b,j)=>{const s=p.els[j],Z=SYM.indexOf(s)+1,[tx,ty]=tXY(Z),col=RE.has(s)?'#FF5A36':'#25313D';
+  const sx=parseFloat(p.lab.style.left)+parseFloat(b.style.left)+31, sy=parseFloat(p.lab.style.top)+parseFloat(b.style.top)+31;
+  const d=el('div','a',screen,`left:0;top:0;width:104px;height:104px;border-radius:18px;background:${col};z-index:36;opacity:0`,
+   `<b style="position:absolute;left:0;right:0;top:25.2px;text-align:center;font:800 50.3px/1 Inter;color:#fff">${s}</b><b style="position:absolute;left:0;right:0;top:34px;text-align:center;font:700 40px/1 Inter;letter-spacing:-.01em;color:#fff;opacity:0">${s}</b><i style="position:absolute;left:-40px;right:-40px;top:120.8px;text-align:center;font:700 40.3px/1 'Alibaba PuHuiTi';font-style:normal;color:#5E6D7B">${ZH[s]}</i><i style="position:absolute;left:11px;top:9px;font:500 15px/1 Inter;font-style:normal;color:#D9E0E6;opacity:0">${Z}</i>`);
+  const o={d,b1:d.children[0],b2:d.children[1],nm:d.children[2],zn:d.children[3],S:[sx,sy],T:[tx+TS/2,ty+TS/2],pk:EV.badge_peel+.012*k,ts:EV.badge_peel+.083+.011*k,ld:EV.badge_land[k],sg:k%2?1:-1,amp:60+(k*37)%70,rr:(k%2?-1:1)*(5+(k*13)%5)};
+  b._det=o.pk;FLY.push(o);k++;}));}
+const eIO=u=>u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2, S0=62/104, eBd=bez(.55,0,.3,1);
+U.push(t=>{const BL=EV.first_lit;FLY.forEach(o=>{
+ if(t<o.pk||t>=BL){o.d.style.opacity=0;return;}o.d.style.opacity=1;
+ const pu=oC(P(t,o.pk,.12)), g=eBd(P(t,o.ts,o.ld-.08-o.ts)), du=P(t,o.ld-.08,.08), dr=iQ(du), sw=t>=o.ld?wob(t-o.ld,4.5,13):0;
+ const[sx,sy]=o.S,[tx,ty]=o.T,dx=tx-sx,dy=ty-sy,L=Math.hypot(dx,dy)||1,arc=Math.sin(Math.PI*g)*o.amp*o.sg;
+ const x=sx+dx*g-dy/L*arc, y=sy+dy*g+dx/L*arc;
+ let s=g<=0?S0*(1+.15*pu):lerp(S0*1.15,1.36,oC(Math.min(1,g*1.25)));s=t>=o.ld?1+.15*sw:lerp(s,1.15,dr);
+ const r=o.rr*pu*(1-g)+Math.sin(Math.PI*g)*o.rr*.9, lift=(1-dr)*Math.max(pu*.55,g>0?.55+.45*Math.sin(Math.PI*Math.min(1,g*1.15)):0);
+ o.d.style.transform=`translate(${x-52}px,${y-52}px) rotate(${r}deg) scale(${s})`;
+ o.d.style.borderRadius=lerp(18.4,12,oC(g))+'px';
+ o.d.style.boxShadow=`0 0 0 ${(6*Math.min(1,Math.max(pu,lift)*2.2)/s).toFixed(2)}px #F7F9FB,0 ${((3+20*lift)/s).toFixed(1)}px ${((5+28*lift)/s).toFixed(1)}px rgba(22,34,46,${(.14+.2*lift).toFixed(3)})`;
+ const xf=P(g,.3,.4);o.b1.style.opacity=1-xf;o.b2.style.opacity=xf;o.nm.style.opacity=1-pu;o.zn.style.opacity=P(g,.65,.35);});});
+// counter block in the top gap
+const CB={x:TX+2*TP+18,y:TY};
+const cKick=el('div','a zh',screen,`left:${CB.x}px;top:${CB.y+6}px;font:700 30px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;z-index:9`,
+ `<span style="display:inline-block;width:20px;height:20px;background:#FF5A36;margin-right:14px;vertical-align:-1px"></span>02 对照元素周期表<span style="font:600 20px Inter;letter-spacing:.18em;color:#8C9AA8;margin-left:18px">PERIODIC TABLE</span>`);
+const cNum=el('div','a in',screen,`left:${CB.x-8}px;top:${CB.y+44}px;font:900 236px/1 Inter;letter-spacing:-.045em;color:#25313D;white-space:nowrap;z-index:9`,'0');
+const cOf=el('div','a in',screen,`left:${CB.x+330}px;top:${CB.y+148}px;font:800 84px/1 Inter;letter-spacing:-.02em;color:#8C9AA8;white-space:nowrap;z-index:9`,'/ 118');
+const cCap=el('div','a zh',screen,`left:${CB.x+338}px;top:${CB.y+248}px;font:700 30px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;z-index:9`,'种元素，出现在一部手机里');
+const LT=[...litT.values()].sort((a,b)=>a-b);
+U.push(t=>{
+ let lit=0;
+ tiles.forEach(o=>{const u=P(t,EV.table_in[0]+o.delay,.34);const e=oB(u,1.4);o.d.style.opacity=clamp(u*3);
+  let s=lerp(.55,1,e),bg='#'+CARD,fg='#'+MID,nm='#'+MID;o.d.style.boxShadow='inset 0 0 0 2px #CDD6DE';
+  if(o.lt!=null&&t>=o.lt){lit++;const q=P(t,o.lt,.16);const w=wob(t-o.lt,5,12);s*=1+.16*(1-q)*(o.lt===EV.first_lit?.94:1)+.02*w*(o.lt===EV.first_lit?2:1);
+   const col=o.re?OR:INK,cq=o.lt===EV.first_lit?1:oC(q);bg=mixc(CARD,col,cq);fg=mixc(MID,'FFFFFF',cq);nm=mixc(MID,'D9E0E6',cq);
+   o.d.style.boxShadow=`inset 0 0 0 2px ${mixc('CDD6DE',col,cq)}`;}
+  if(o.hole!=null&&t>=o.hole){s=1;bg='transparent';fg=nm='transparent';o.d.style.boxShadow='none';o.d.style.outline='3px dashed #AEBAC5';o.d.style.outlineOffset='-6px';}else o.d.style.outline='none';
+  o.d.style.transform=`translate(${o.x}px,${o.y}px) scale(${s})`;if(o.Z){o.d.style.background=bg;o.b.style.color=fg;o.i.style.color=nm;}});
+ const ci=oC(P(t,EV.counter_in,.4));[cKick,cNum,cOf,cCap].forEach((e,i)=>{const q=oC(P(t,EV.counter_in+i*.06,.4));e.style.opacity=q;e.style.transform=`translateY(${(1-q)*24}px)`;});
+ const tf=Math.round(t*30)/30,BLd=EV.badge_land.filter(v=>v<=tf+1e-4);lit=tf<EV.first_lit-1e-4?BLd.length:LT.filter(v=>v<=tf).length;cNum.textContent=String(lit);const lk=P(t,EV.cascade[1],.25);cNum.style.color=lk>0&&lk<1?mixc(OR,INK,lk):(lk>=1?'#25313D':(lit>0?'#25313D':'#8C9AA8'));
+ const td=lit>=10&&lit<70?LT[Math.floor(lit/10)*10-1]:-9;cNum.style.transform+=` scale(${1+.06*wob(t-EV.cascade[1],4,9)*(t>=EV.cascade[1]?1:0)+.05*(1-oC(P(t,td,.2)))*(td>0?1:0)+(tf<EV.first_lit&&BLd.length?.07*(1-oC(P(t,BLd[BLd.length-1],.12))):0)})`;cNum.style.transformOrigin='0 70%';if(t>=EV.peel)cNum.style.opacity=1-.75*oC(P(t,EV.peel,.1));
+});
+// ---------- D: unit bar chart ----------
+const DX=300,DY=3860,RP=150,CW=60,CH=72,CPX=66;
+const dTitle=el('div','a zh',screen,`left:${DX}px;top:${DY-40}px;font:700 30px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;z-index:9`,
+ `<span style="display:inline-block;width:20px;height:20px;background:#FF5A36;margin-right:14px;vertical-align:-1px"></span>03 按类别统计<span style="font:600 20px Inter;letter-spacing:.18em;color:#8C9AA8;margin-left:18px">BY CATEGORY · 共 70 种</span>`);
+const axis=sv('svg',{width:WW,height:WH,style:'position:absolute;left:0;top:0;z-index:7;overflow:visible'},screen);
+const axG=sv('g',{},axis);
+const rowY=i=>DY+30+i*RP;
+sv('line',{x1:DX-14,y1:rowY(0)+30,x2:DX-14,y2:rowY(4)+46+CH+14,stroke:'#25313D','stroke-width':3},axG);
+[5,10,15,20].forEach(n=>{const x=DX+n*CPX-3;sv('line',{x1:x,y1:rowY(0)+30,x2:x,y2:rowY(4)+46+CH+14,stroke:'#AEBAC5','stroke-width':2,'stroke-dasharray':'4 8'},axG);
+ const tx=sv('text',{x,y:rowY(4)+46+CH+52,fill:'#8C9AA8','font-family':'Inter','font-weight':600,'font-size':24,'text-anchor':'middle'},axG);tx.textContent=n;});
+CATS.forEach((c,i)=>{const y=rowY(i);
+ c.lab=el('div','a zh',screen,`left:${DX}px;top:${y}px;font:700 34px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;z-index:16`,
+  `${c.zh}<span style="font:600 16px Inter;letter-spacing:.18em;color:#8C9AA8;margin-left:16px;vertical-align:4px">${c.en}</span>`);
+ c.num=el('div','a in',screen,`left:0;top:${y+46}px;font:900 64px/72px Inter;letter-spacing:-.03em;color:${c.k==='re'?'#FF5A36':'#25313D'};z-index:16`,'0');
+ c.slotY=y+46;});
+const chips=[];let ord=0;
+const ROWO=EV.chip_rows;CATS.forEach((c,ci)=>[...c.list].sort((a,b)=>{const A_=tXY(a),B_=tXY(b);return A_[0]-B_[0]||A_[1]-B_[1];}).forEach((Z,j)=>{const[x,y]=tXY(Z);const d=el('div','chip',screen,`z-index:${12+ord%3}`,`<b>${SYM[Z-1]}</b>`);
+ const tl=EV.chip_lift+ci*.01+(j%4)*.008;tiles[Z-1].hole=tl;
+ chips.push({Z,ci,j,d,b:d.querySelector('b'),fx:x,fy:y,tx:DX+j*CPX,ty:c.slotY,tl,t0:EV.chips[0]+j*EV.chip_stagger[0]+ROWO.indexOf(ci)*EV.chip_stagger[1],col:c.k==='re'?OR:INK});ord++;}));
+const ioS2=u=>-(Math.cos(Math.PI*u)-1)/2;
+const chipPos=(o,t)=>{const u=P(t,o.t0,EV.chip_flight),e=ioS2(u),arc=Math.sin(Math.PI*e);return{u,e,arc,x:lerp(o.fx,o.tx,e)+arc*(o.ci-2)*40,y:lerp(o.fy,o.ty,e)-arc*30};};
+{const cen=t=>{let s=0;for(const o of chips)s+=chipPos(o,t).y;return s/chips.length;};const k=CAM.findIndex(c=>c.move==='track'),A_=CAM[k-1],B_=CAM[k],c0=cen(0),c1=cen(99);
+ B_.y=A_.y+(c1-c0);TRK=t=>{const c=cen(t),p=(c-c0)/(c1-c0);return{x:A_.x,y:A_.y+(c-c0),z:Math.exp(lerp(Math.log(A_.z),Math.log(B_.z),p)),r:0};};}
+U.push((t,C)=>{
+ const tf_=Math.round(t*30)/30,tw=tf_+(t-tf_)*.5,Cw=cam(tw),kz=Cw.z/C.z;   // chips in flight: effective shutter .25 (screen-space rebase)
+ const reS=EV.re_pill[0],reF=oC(P(t,reS,.1));
+ const at=oC(P(t,EV.axis_in,.5));axG.style.opacity=at;dTitle.style.opacity=oC(P(t,EV.chips[0]+.1,.4));
+ const cnt=[0,0,0,0,0],lastL=[-9,-9,-9,-9,-9];
+ chips.forEach(o=>{if(t<o.tl){o.d.style.opacity=0;return;}const lq=oC(P(t,o.tl,.1));const q=chipPos(o,t),u=q.u,e=q.e,arc=q.arc;let x=q.x,y=q.y;
+  if(u>0&&u<1){const qw=chipPos(o,tw);x=C.x+(qw.x-Cw.x)*kz;y=C.y+(qw.y-Cw.y)*kz;}const w=lerp(TS,CW,e), h=lerp(TS,CH,e);
+  if(u>=1){cnt[o.ci]=Math.max(cnt[o.ci],o.j+1);lastL[o.ci]=Math.max(lastL[o.ci],o.t0+EV.chip_flight);}const land=wob(t-o.t0-EV.chip_flight,5,12)*(u>=1?1:0);
+  o.d.style.opacity=o.ci===1?1-reF:1;o.d.style.width=w+'px';o.d.style.height=h+'px';o.d.style.transform=`translate(${x}px,${y}px) rotate(${arc*((o.j%3)-1)*7}deg) scale(${(1+.08*lq*(1-e))*(1+.06*arc)-.05*land})`;
+  o.d.style.background='#'+o.col;o.b.style.color='#fff';o.b.style.fontSize=lerp(40,27,e)+'px';o.b.style.top=lerp(34,23,e)+'px';
+  const sh=Math.max(arc,lq*(1-e)*.6);o.d.style.boxShadow=sh>.02?`0 ${14*sh}px ${24*sh}px rgba(22,34,46,${.22*sh})`:'none';});
+ CATS.forEach((c,i)=>{const lq=oC(P(t,EV.chips[0]+ROWO.indexOf(i)*EV.chip_stagger[1]+EV.chip_flight*.8,.3));c.lab.style.opacity=lq*(i===1?1-reF:1);c.lab.style.transform=`translateY(${(1-lq)*16}px)`;
+  const n=cnt[i];c.num.textContent=n;c.num.style.opacity=n>0?(i===1?1-reF:1):0;c.num.style.transformOrigin='0 60%';c.num.style.transform=`translate(${DX+n*CPX+18}px,0) scale(${1+.16*(1-oC(P(t,lastL[i],.16)))})`;});
+});
+// ---------- E: world map ----------
+const topo=await fetch(ROOT+'assets/countries-110m.json').then(r=>r.json());
+const land=topojson.feature(topo,topo.objects.countries);
+const MB=[[330,4880],[2210,5790]];
+const proj=d3.geoNaturalEarth1().fitExtent(MB,{type:'Sphere'});
+const gp=d3.geoPath(proj);
+const mapSvg=sv('svg',{width:WW,height:WH,style:'position:absolute;left:0;top:0;z-index:4;overflow:visible'},screen);
+const mapG=sv('g',{},mapSvg);
+sv('path',{d:gp({type:'Sphere'}),fill:'#E1E7EC',stroke:'#C6D0D9','stroke-width':3},mapG);
+sv('path',{d:gp(d3.geoGraticule10()),fill:'none',stroke:'#D2DAE1','stroke-width':1.5},mapG);
+const HL={'180':'#8C9AA8','036':'#8C9AA8','360':'#8C9AA8','156':'#25313D'};
+land.features.forEach(f=>{if(f.properties.name==='Antarctica')return;sv('path',{d:gp(f),fill:HL[f.id]||'#C3CDD6',stroke:'#E1E7EC','stroke-width':1.6,'stroke-linejoin':'round'},mapG);});
+const eTitle=el('div','a zh',screen,`left:${MB[0][0]}px;top:${MB[0][1]-66}px;font:700 30px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;z-index:9`,
+ `<span style="display:inline-block;width:20px;height:20px;background:#FF5A36;margin-right:14px;vertical-align:-1px"></span>04 它们从哪里来<span style="font:600 20px Inter;letter-spacing:.18em;color:#8C9AA8;margin-left:18px">SUPPLY ROUTES · 主要产地示意</span>`);
+const DEST=proj([114.06,22.54]);
+const ORIG=[
+ {k:'cobalt',ll:[27.5,-11.7],off:[-223,69],zh:'钴 Co',pl:'刚果（金）',col:INK},
+ {k:'lithium',ll:[116.1,-33.8],off:[-35,129],zh:'锂 Li',pl:'澳大利亚',col:INK,lp:'r'},
+ {k:'tin',ll:[106.1,-2.1],off:[-196,63],zh:'锡 Sn',pl:'印度尼西亚',col:INK},
+ {k:'rareearth',ll:[109.9,41.8],off:[-201,-80],zh:'稀土<span style="font:900 34px Inter;margin-left:10px">16</span>',pl:'中国·内蒙古',col:OR}];   // every sticker sits next to its own origin, leaders never cross a route
+const routeSvg=sv('svg',{width:WW,height:WH,style:'position:absolute;left:0;top:0;z-index:25;overflow:visible'},screen);
+ORIG.forEach((o,i)=>{const p=proj(o.ll);o.p=p;const sc=o.k==='rareearth'?.62:o.k==='tin'?.7:.78;o.sc=sc;
+ const dx=DEST[0]-p[0],dy=DEST[1]-p[1],L=Math.hypot(dx,dy);const bend=Math.min(260,L*.35)*(i===0?-1:1);
+ const cx=(p[0]+DEST[0])/2-dy/L*bend, cy=(p[1]+DEST[1])/2+dx/L*bend;
+ o.route=sv('path',{d:`M${p[0]} ${p[1]} Q${cx} ${cy} ${DEST[0]} ${DEST[1]}`,fill:'none',stroke:'#'+o.col,'stroke-width':8,'stroke-linecap':'round',pathLength:1,'stroke-dasharray':'1 1'},routeSvg);
+ o.len=o.route.getTotalLength();o.packs=[0,1,2].map(()=>sv('circle',{r:9,fill:'#'+o.col,stroke:'#F7F9FB','stroke-width':4},routeSvg));
+ {const q1=o.route.getPointAtLength(o.len-46),q0=o.route.getPointAtLength(o.len-60);o.arw=sv('path',{d:'M 16 0 L -12 -13 L -6 0 L -12 13 Z',fill:'#'+o.col,stroke:'#F7F9FB','stroke-width':4,'stroke-linejoin':'round','paint-order':'stroke'},routeSvg);o.aa=Math.atan2(q1.y-q0.y,q1.x-q0.x)*180/Math.PI;o.ap=q1;}
+ o.dot=sv('circle',{cx:p[0],cy:p[1],r:12,fill:'#'+o.col,stroke:'#F7F9FB','stroke-width':5},routeSvg);
+ const sx=p[0]+o.off[0], sy=p[1]+o.off[1];o.s=[sx,sy];
+ o.lead=sv('path',{d:`M${sx} ${sy} L${p[0]} ${p[1]}`,fill:'none',stroke:'#25313D','stroke-width':3,'stroke-dasharray':'2 9','stroke-linecap':'round'},routeSvg);
+ o.img=stickerImg(o.k,meta[o.k].w,meta[o.k].h,26);
+ o.lab=el('div','a',screen,`z-index:27;left:${o.lp?sx+meta[o.k].w*sc/2+10:sx}px;top:${o.lp?sy-28:sy+meta[o.k].h*sc/2+6}px;white-space:nowrap`,
+  `<div style="position:absolute;left:0;transform:translateX(${o.lp?0:-50}%);background:${o.col===OR?'#FF5A36':'#25313D'};color:#fff;border-radius:10px;padding:10px 18px 11px;font:900 34px/1 'Alibaba PuHuiTi'">${o.zh}<span style="font:500 26px 'Alibaba PuHuiTi';margin-left:12px;opacity:.85">${o.pl}</span></div>`);
+ o.st=EV.stickers[i];o.rt=EV.routes[i];});
+const pin=el('div','a',screen,`z-index:28;left:${DEST[0]}px;top:${DEST[1]}px`,
+ `<div style="position:absolute;left:-26px;top:-26px;width:52px;height:52px;border-radius:50%;background:#FF5A36;box-shadow:0 0 0 8px #F7F9FB,0 8px 18px rgba(22,34,46,.3)"></div>
+`);
+const pinLab=el('div','a zh',screen,`z-index:28;left:${DEST[0]+46}px;top:${DEST[1]-30}px;white-space:nowrap;font:900 50px/1 'Alibaba PuHuiTi';color:#25313D`,`深圳<span style="font:700 30px 'Alibaba PuHuiTi';color:#5E6D7B;margin-left:12px">组装 ASSEMBLY</span>`);
+const pinRing=el('div','a',screen,`z-index:27;left:${DEST[0]-26}px;top:${DEST[1]-26}px;width:52px;height:52px;border-radius:50%;border:5px solid #FF5A36`);
+U.push((t,C)=>{
+ const pk=Math.max(1,.4/C.z);
+ const mi=P(t,EV.map_in[0],EV.map_in[1]-EV.map_in[0]);mapG.style.opacity=oC(mi);mapG.style.transform=`translateY(${(1-oC(mi))*40}px)`;
+ eTitle.style.opacity=oC(P(t,EV.map_in[0]+.1,.4));
+ ORIG.forEach(o=>{const sl=slap(t,o.st,.2);o.img.style.opacity=sl.o;
+  o.img.style.transform=`translate(${o.s[0]-meta[o.k].w/2}px,${o.s[1]-meta[o.k].h/2}px) rotate(${sl.r+(o.k==='tin'?-3:2)}deg) scale(${o.sc*sl.s})`;o.img.style.filter=shadow(sl.lift);
+  const lb=oB(P(t,o.st+.08,.3),1.8);o.lab.style.opacity=lb>0?1:0;o.lab.style.transform=`scale(${lb})`;o.lab.style.transformOrigin='0 0';
+  const du=P(t,o.st-.06,.2);o.dot.setAttribute('r',12*oB(du,2));o.dot.style.opacity=du>0?1:0;o.lead.style.opacity=oC(P(t,o.st,.2));
+  const ru=P(t,o.rt,EV.route_dur);o.route.setAttribute('stroke-dashoffset',1-ioC(ru));const ar=oB(P(t,o.rt+EV.route_dur-.08,.24),2);o.arw.style.opacity=ar>0?1:0;o.arw.setAttribute('transform',`translate(${o.ap.x} ${o.ap.y}) rotate(${o.aa}) scale(${ar*Math.min(pk,1.8)})`);
+  o.packs.forEach(c=>{c.setAttribute('r',9*pk);c.setAttribute('stroke-width',4*pk);});
+  o.packs.forEach((c,k)=>{if(ru<1){c.style.opacity=k===0&&ru>0?1:0;if(ru>0){const q=o.route.getPointAtLength(o.len*ioC(ru));c.setAttribute('cx',q.x);c.setAttribute('cy',q.y);}return;}
+   const f=((t-o.rt-EV.route_dur)*0.55+k/3)%1;const q=o.route.getPointAtLength(o.len*f);c.style.opacity=clamp(f*8)*clamp((1-f)*8);c.setAttribute('cx',q.x);c.setAttribute('cy',q.y);});});
+ const pu=P(t,EV.pin,.3);pin.style.opacity=pu>0?1:0;pin.style.transform=`scale(${oB(pu,2)})`;const pl=oC(P(t,EV.pin+.05,.2));pinLab.style.opacity=clamp(pl*1.6);pinLab.style.transform=`translateX(${(1-pl)*-44}px)`;
+ const rp=((t-EV.pin)%1.1)/1.1;pinRing.style.opacity=t>EV.pin?(1-rp)*.8:0;pinRing.style.transform=`scale(${1+rp*1.6})`;
+});
+// ---------- R2PATCHB graphic match #3: the orange rare-earth bar compresses into a '稀土 16' pill that rides the camera to Inner Mongolia ----------
+{const fxL=document.getElementById('fx'),RO=ORIG.find(o=>o.k==='rareearth'),inner=RO.lab.firstChild,plc=inner.lastChild;
+ const pill=el('div','a',fxL,`opacity:0;background:#FF5A36;border-radius:10px;overflow:hidden;transform-origin:0 0`);
+ const ptx=el('div','a zh',pill,`left:50%;top:50%;transform:translate(-50%,-50%);white-space:nowrap;color:#fff;font:900 34px/1 'Alibaba PuHuiTi'`,`稀土<span style="font:900 34px Inter;margin-left:10px">16</span>`);
+ const BW=15*CPX+CW,BH=CH,BC=[DX+BW/2,rowY(1)+46+CH/2];let Wf=0,Wa=0,Hh=0,LC=null;
+ U.push((t,C,W)=>{const[s0,s1,s2]=EV.re_pill;
+  if(!Wf){Wf=inner.offsetWidth;Hh=inner.offsetHeight;Wa=Wf-plc.offsetWidth-12;LC=[parseFloat(RO.lab.style.left)-Wf/2+Wa/2,parseFloat(RO.lab.style.top)+Hh/2];}
+  RO.lab.style.transformOrigin=`${(-Wf/2+Wa/2).toFixed(1)}px ${(Hh/2).toFixed(1)}px`;
+  if(t<s2){RO.lab.style.opacity=0;}else{RO.lab.style.opacity=1;RO.lab.style.transform=`scale(${1+.12*wob(t-s2,4,10)})`;
+   const k=oC(P(t,s2+.03,.22));inner.style.clipPath=k>=1?'none':`inset(0 ${((Wf-Wa)*(1-k)).toFixed(1)}px 0 0 round 10px)`;}
+  if(t<s0||t>=s2){pill.style.opacity=0;return;}
+  const lag=.12*oC(P(t,s0,s1-s0)),CL=cam(t-lag),WL=worldM(t-lag,CL),A=mapW(WL.m,BC[0],BC[1]),kA=CL.z*WL.ls;
+  const c=eIO(P(t,s0,s1-s0)),e=ioC(P(t,s1,s2-s1)),B=mapW(W.m,LC[0],LC[1]),kB=C.z*W.ls;
+  const dx=B[0]-A[0],dy=B[1]-A[1],L=Math.hypot(dx,dy)||1;let nx=-dy/L,ny=dx/L;if(ny>0){nx=-nx;ny=-ny;}const arc=Math.sin(Math.PI*e);
+  const X=lerp(A[0],B[0],e)+nx*arc*110,Y=lerp(A[1],B[1],e)+ny*arc*110,k=Math.exp(lerp(Math.log(kA),Math.log(kB),e))*(1+.12*oC(e));
+  const w=lerp(BW,Wa,c),h=lerp(BH,Hh,c),lift=Math.max(c*.5,arc);
+  pill.style.opacity=clamp(P(t,s0,.07));pill.style.width=w.toFixed(1)+'px';pill.style.height=h.toFixed(1)+'px';
+  pill.style.transform=`translate(${(X-w*k/2).toFixed(2)}px,${(Y-h*k/2).toFixed(2)}px) scale(${k.toFixed(4)})`;
+  pill.style.boxShadow=`0 0 0 ${(5*Math.min(1,c*2)*(1-P(e,.7,.3))).toFixed(2)}px #F7F9FB,0 ${(4+18*lift).toFixed(1)}px ${(8+26*lift).toFixed(1)}px rgba(22,34,46,${(.12+.2*lift).toFixed(3)})`;
+  ptx.style.opacity=P(c,.35,.5);});}
+// ---------- HUD (bottom rail) ----------
+const hLogo=el('div','a zh',hud,`left:96px;top:1006px;font:900 24px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap;letter-spacing:.06em`,
+ `<span style="display:inline-block;width:15px;height:15px;background:#FF5A36;margin-right:12px;vertical-align:0"></span>格物<span style="font:700 16px Inter;letter-spacing:.24em;margin-left:12px;opacity:.6">GEWU LAB</span>`);
+const CHP=[['01','拆解'],['02','周期表'],['03','分类'],['04','产地']];const CHT=cues.chapters;
+const RX=1184,RW=640,SGW=(RW-3*10)/4;
+const hCh=CHP.map((c,i)=>{const e=el('div','a zh',hud,`left:${RX+i*(SGW+10)}px;top:1004px;width:${SGW}px;font:700 19px/1 'Alibaba PuHuiTi';color:#25313D;white-space:nowrap`,`<span style="font:700 15px Inter;margin-right:8px;letter-spacing:.06em">${c[0]}</span>${c[1]}`);
+ const tr=el('div','a',hud,`left:${RX+i*(SGW+10)}px;top:1034px;width:${SGW}px;height:4px;border-radius:2px;background:rgba(37,49,61,.15);overflow:hidden`);
+ const f=el('div','a',tr,`left:0;top:0;width:${SGW}px;height:4px;background:#FF5A36;transform-origin:0 50%`);return{e,tr,f};});
+U.push(t=>{const dark=oC(P(t,7.1,.5));const c=mixc(INK,'E9EEF2',dark);hLogo.style.color=c;const fade=(1-oC(P(t,7.0,.3)))*oC(P(t,.35,.4));hLogo.style.opacity=fade;
+ hCh.forEach((h,i)=>{const on=t>=CHT[i]&&t<CHT[i+1];h.e.style.color=c;h.e.style.opacity=(on?1:.4)*fade;h.tr.style.opacity=fade;
+  h.f.style.transform=`scaleX(${clamp((t-CHT[i])/(CHT[i+1]-CHT[i]))})`;});});
+// ---------- END CARD (screen space) ----------
+// the in-phone counter '70' peels off as a white-outlined sticker, flies a dotted arc and slams at hero size
+const EX=860, EB=626;   // text column x, baseline of the hero number
+const eK=el('div','a zh',endL,`left:${EX}px;top:236px;font:700 28px/1 'Alibaba PuHuiTi';color:#E9EEF2;white-space:nowrap;letter-spacing:.04em`,
+ `<span style="display:inline-block;width:18px;height:18px;background:#FF5A36;margin-right:14px;vertical-align:-1px"></span>一部智能手机的元素清单<span style="font:600 20px Inter;letter-spacing:.2em;color:#8C9AA8;margin-left:16px">EXPLAINER · NO.001</span>`);
+const eTs=sv('svg',{width:1920,height:1080,style:'position:absolute;left:0;top:0;overflow:visible'},endL);
+const eOf=sv('text',{x:0,y:EB,fill:'#8C9AA8','font-family':'Inter','font-weight':800,'font-size':132,'letter-spacing':-3},eTs);eOf.textContent='/118';
+const eFl=sv('circle',{r:0,fill:'none',stroke:'#FF5A36','stroke-width':12},eTs);
+const eStk=el('div','a',endL,'transform-origin:0 0');
+const eSv=sv('svg',{width:1,height:1,style:'position:absolute;left:0;top:0;overflow:visible'},eStk);
+const eD2=sv('defs',{},eSv),nbF=sv('filter',{id:'nblur',filterUnits:'userSpaceOnUse',x:-900,y:-520,width:1800,height:1040},eD2),nbG=sv('feGaussianBlur',{stdDeviation:'0 0'},nbF),eHero=bez(.2,.8,.2,1);
+const eNum=sv('text',{x:0,y:146,'font-family':'Inter','font-weight':900,'font-size':400,'letter-spacing':-20,fill:'#FF5A36',stroke:'#F7F9FB','stroke-width':30,'stroke-linejoin':'round','paint-order':'stroke'},eSv);eNum.textContent='70';
+const eH=el('div','a zh',endL,`left:${EX}px;top:${EB+78}px;font:900 62px/1 'Alibaba PuHuiTi';color:#F7F9FB;white-space:nowrap`,
+ `一部手机，装下<span style="position:relative;display:inline-block"><i class="emk" style="position:absolute;left:-4px;right:-4px;bottom:-4px;height:24px;background:#FF5A36;transform-origin:0 50%;transform:scaleX(0)"></i><span style="position:relative">大半张</span></span>元素周期表`);
+const eMk=eH.querySelector('.emk');
+const eC=el('div','a zh',endL,`left:${EX}px;top:${EB+176}px;font:500 28px/1.55 'Alibaba PuHuiTi';color:#9AA8B5;white-space:nowrap`,'已知 118 种元素中，一部智能手机用到约 70 种，其中稀土就有 16 种。');
+const eSrc=el('div','a zh',endL,`left:${EX}px;top:962px;font:500 20px/1 'Alibaba PuHuiTi';color:#5F6E7C;white-space:nowrap`,'* 元素归类为示意统计；产地为主要来源示意');
+const esvg=document.getElementById('endsvg');
+const eDefs=sv('defs',{},esvg),eMask=sv('mask',{id:'cmask',maskUnits:'userSpaceOnUse',x:-200,y:-200,width:2320,height:1480},eDefs);
+const eMP=sv('path',{fill:'none',stroke:'#fff','stroke-width':40,'stroke-linecap':'round',pathLength:1,'stroke-dasharray':'1 1'},eMask);
+const eLine=sv('path',{fill:'none',stroke:'#FF5A36','stroke-width':6,'stroke-linecap':'round','stroke-dasharray':'0.1 14',mask:'url(#cmask)'},esvg);
+const eRing=sv('circle',{r:7,fill:'none',stroke:'#FF5A36','stroke-width':3},esvg);
+const eDot=sv('circle',{r:7,fill:'#FF5A36',stroke:'#F7F9FB','stroke-width':3},esvg);
+const EDR=V5?13:7;if(V5){eDot.setAttribute('stroke-width',5);eDot.style.filter='drop-shadow(0 3px 4px rgba(4,8,12,.45))';}   // v5: the contrail start dot is the film's end-card 'dot' (round sticker)
+let eW=0;const qb=(a,b,c,v)=>(1-v)*(1-v)*a+2*(1-v)*v*b+v*v*c;
+U.push((t,C,W)=>{
+ if(!eW){eW=eNum.getComputedTextLength();eNum.setAttribute('x',(-eW/2).toFixed(1));eOf.setAttribute('x',EX+eW+30);}
+ const eS=1+.02*(u=>u*u*(3-u)/2)(P(t,8.5,1.5));
+ endL.style.transformOrigin=esvg.style.transformOrigin=`${EX}px ${EB}px`;endL.style.transform=esvg.style.transform=`translateY(${W.J}px) scale(${eS})`;
+ const toE=p=>[EX+(p[0]-EX)/eS,EB+(p[1]-W.J-EB)/eS];
+ const S=toE(mapW(W.m,CB.x+146,CB.y+166)),G=[EX+eW/2,EB-146];   // in-phone '70' centre / sticker centre, end-layer coords
+ // contrail: right from the in-phone counter, out through the phone's right edge at y 680, then arc up into the sticker's lower-left
+ const a0=mapW(W.m,2640,0),a1=mapW(W.m,2640,5900),kq=(680-a0[1])/(a1[1]-a0[1]),Ep=toE([lerp(a0[0],a1[0],kq),680]);
+ const q1=[lerp(S[0],Ep[0],.55),Ep[1]+30],kk=(lerp(Ep[0],G[0],.42)-Ep[0])/Math.max(1,Ep[0]-q1[0]),q2=[Ep[0]+(Ep[0]-q1[0])*kk,Ep[1]+(Ep[1]-q1[1])*kk];
+ const f1=v=>v.toFixed(1),d=`M${f1(S[0])} ${f1(S[1])} Q${f1(q1[0])} ${f1(q1[1])} ${f1(Ep[0])} ${f1(Ep[1])} Q${f1(q2[0])} ${f1(q2[1])} ${f1(G[0])} ${f1(G[1])}`;
+ eLine.setAttribute('d',d);eMP.setAttribute('d',d);
+ const Lt=eLine.getTotalLength(),Ld=Math.min(58,Lt*.1),Lv=Math.max(80,Lt-Ld-250),Dp=eLine.getPointAtLength(Ld);
+ eLine.setAttribute('stroke-dasharray',`0.1 ${(Lv/12).toFixed(2)}`);eLine.setAttribute('stroke-dashoffset',(-Ld).toFixed(2));
+ const pk=EV.peel,f0=EV.endline[0],land=EV.slam,s0=236*W.ls*C.z/400,l0=Math.log(s0*1.35),l1=Math.log(1.1);
+ const u=P(t,f0,land-f0),ep=eHero(u);let x,y,sc,r,sh,vx=0,vy=0,vs=0;
+ if(t<pk){eStk.style.opacity=0;eNum.removeAttribute('filter');}
+ else{eStk.style.opacity=1;
+  if(t<f0){const p=oC(P(t,pk,f0-pk));x=S[0];y=S[1]-8*p;sc=s0*(1+.35*p);r=(C.r||0)+2*p;sh=p;eNum.setAttribute('fill',mixc(INK,OR,p));}
+  else if(t<land){const q=eLine.getPointAtLength(Lt*ep);x=q.x;y=q.y;sc=Math.exp(lerp(l0,l1,ep));r=lerp((C.r||0)+2,-2,ep)+8*Math.sin(Math.PI*ep);sh=1;eNum.setAttribute('fill','#FF5A36');
+   const h=.004,e1=eHero(P(t+h,f0,land-f0)),e0=eHero(P(t-h,f0,land-f0)),p1=eLine.getPointAtLength(Lt*e1),p0=eLine.getPointAtLength(Lt*e0);
+   vx=(p1.x-p0.x)/(60*h);vy=(p1.y-p0.y)/(60*h);vs=Math.abs(l1-l0)*(e1-e0)/(60*h);}
+  else{const dt=t-land,fl=oC(P(dt,.35,.8));x=G[0];y=G[1]-4*Math.sin(dt*2.4)*fl;sc=1+.1*wob(dt,4.2,7.7)+.006*Math.sin(dt*2.4)*fl;r=-2+1.4*wob(dt,3,7)+.35*Math.sin(dt*1.8)*fl;sh=.12+.08*fl*(.5+.5*Math.sin(dt*2.4));}
+  eStk.style.transform=`translate(${x}px,${y}px) rotate(${r}deg) scale(${sc})`;
+  eStk.style.filter=`drop-shadow(0 ${(8+34*sh).toFixed(1)}px ${(12+40*sh).toFixed(1)}px rgba(4,8,12,${(.5-.15*sh).toFixed(3)}))`;
+  // directional + scale blur along the flight path (fuses the harness sub-samples: no stepped onion-skin copies)
+  const kb=.75*SH/MBN,bx=Math.min(60,kb*(Math.abs(vx)+380*sc*vs)/sc),by=Math.min(60,kb*(Math.abs(vy)+150*sc*vs)/sc);
+  if(bx+by>.5){nbG.setAttribute('stdDeviation',`${bx.toFixed(2)} ${by.toFixed(2)}`);eNum.setAttribute('filter','url(#nblur)');}else eNum.removeAttribute('filter');}
+ const qf=P(t,land,.16);eFl.setAttribute('cx',G[0]);eFl.setAttribute('cy',G[1]);eFl.setAttribute('r',200+230*oC(qf));eFl.setAttribute('stroke-width',16*(1-qf));eFl.style.opacity=t>=land&&qf<1?1-qf:0;
+ eMP.setAttribute('stroke-dashoffset',1-ep);eLine.style.opacity=t>=f0?1:0;
+ eDot.setAttribute('cx',Dp.x);eDot.setAttribute('cy',Dp.y);eDot.setAttribute('r',EDR*oB(P(t,f0,.25),2));
+ const rp=Math.max(0,t-land)%1.15/1.15;eRing.setAttribute('cx',Dp.x);eRing.setAttribute('cy',Dp.y);eRing.setAttribute('r',EDR+15*oC(rp));eRing.style.opacity=t>land?.7*(1-rp):0;
+ const k=oC(P(t,land-.1,.4));eK.style.opacity=k;eK.style.transform=`translateY(${(1-k)*16}px)`;
+ const o=oX(P(t,EV.slash,.4));eOf.style.opacity=clamp(P(t,EV.slash,.1));eOf.style.transform=`translateX(${(1-o)*-50}px)`;
+ const h=oX(P(t,EV.headline,.45));eH.style.opacity=clamp(P(t,EV.headline,.15));eH.style.transform=`translateY(${(1-h)*30}px)`;
+ eMk.style.transform=`scaleX(${ioC(P(t,EV.marker_end[0],EV.marker_end[1]-EV.marker_end[0]))})`;
+ const c=oC(P(t,EV.caption,.45));eC.style.opacity=c;eC.style.transform=`translateY(${(1-c)*16}px)`;eSrc.style.opacity=.9*oC(P(t,EV.caption+.2,.5));
+});
+// ================= REEL v5 (only with ?v5=1): style-name title 「贴纸人科普」 + sticker character + link dot =================
+const V5S_={s:0};   // source time of the current renderAt (the character's idle runs on source time, not warped film time)
+const V5X={};
+// phone sticker pose (same formulas as the phone updater in B; pure in film t)
+function phonePose(t){const ph=phoneAt(t),land=EV.phone_land,pre=t<land,he=iQ(P(t,0,land)),sq=pre?0:wob(t-land,4,12);
+ const sl={y:pre?-420*(1-he):0,r:pre?-14*(1-he):-.8*sq,s:pre?1+.18*(1-he):1,sx:1+.04*sq,sy:1-.05*sq};
+ const fl=(1-oC(P(t,EV.phone_fly[0]-.05,.3)))*oC(P(t,.3,.5)),fy=Math.sin((t-.3)*2.6)*9*fl,fr=Math.sin((t-.3)*2.0+.4)*1.3*fl;
+ return{cx:ph.x,cy:ph.y-fy+sl.y,r:ph.r+sl.r+fr,sx:ph.s*sl.s*sl.sx,sy:ph.s*sl.s*sl.sy};}
+// the dot: a round orange die-cut sticker slapped onto the phone's screen (phone-local offset from the image centre)
+const V5DOT={ox:112,oy:-316,land:.54,Rf:34,RW:11};
+function v5PhoneDot(t){const q=phonePose(t),a=q.r*Math.PI/180,lx=q.sx*V5DOT.ox,ly=q.sy*V5DOT.oy,sl=slap(t,V5DOT.land,.18,.45);
+ return{x:q.cx+lx*Math.cos(a)-ly*Math.sin(a),y:q.cy+lx*Math.sin(a)+ly*Math.cos(a),k:(q.sx+q.sy)/2*sl.s,o:sl.o,lift:sl.lift};}
+const V5T={x:330,top:452,fs:212,ls:-2,pad:25,gap:26};
+const V5TS=[{txt:'贴纸人',fill:'#25313D',land:.12,rot:-2.2},{txt:'科普',fill:'#FF5A36',land:.26,rot:1.8}];
+const V5C={x:1196,y:1104,land:.40,sc:.95};   // character feet (world px)
+if(V5){
+ [L1m,L2m].forEach(e=>e.style.display='none');
+ subEn.textContent='STICKER EXPLAINER';subEn.style.top='714px';subEn.style.font='700 34px/1 Inter';subEn.style.letterSpacing='.32em';
+ rule.style.top='800px';aNote.style.top='826px';
+ // title: two die-cut stickers (thick white outline = a 2*pad white stroke under the fill, drop shadow), slapped on
+ V5X.title=V5TS.map(o=>{const d=el('div','a',screen,'z-index:12;transform-origin:50% 50%;opacity:0');
+  const s=sv('svg',{width:10,height:10,style:'position:absolute;left:0;top:0;overflow:visible'},d);
+  const A={'font-family':'Alibaba PuHuiTi','font-weight':1000,'font-size':V5T.fs,'letter-spacing':V5T.ls};
+  const back=sv('text',{...A,fill:'#F7F9FB',stroke:'#F7F9FB','stroke-width':2*V5T.pad,'stroke-linejoin':'round'},s);back.textContent=o.txt;
+  const front=sv('text',{...A,fill:o.fill},s);front.textContent=o.txt;return{...o,d,s,back,front};});
+ // sticker character (贴纸人): flat shapes, one white die-cut silhouette pass (OW px border) under the colour pass, drop shadow
+ const OW=12,SK='#F5C9A6',HR='#25313D',HD='#4A6D8C',HD2='#3B5872',PT='#2B3846',SH='#FF5A36';
+ const G={body:[],arm:[],head:[]};const S=(g,tag,at,fill,o={})=>G[g].push({tag,at,fill,...o});
+ // body (feet at 0,0; y up is negative)
+ S('body','rect',{x:-38,y:-116,width:32,height:100,rx:13},PT);S('body','rect',{x:6,y:-116,width:32,height:100,rx:13},PT);
+ S('body','path',{d:'M -54 -3 C -56 -24 -42 -32 -24 -30 L -8 -28 C -3 -28 -1 -24 -1 -18 L -1 -6 C -1 -2 -4 0 -9 0 L -50 0 C -53 0 -54 -1 -54 -3 Z'},SH);
+ S('body','path',{d:'M 54 -3 C 56 -24 42 -32 24 -30 L 8 -28 C 3 -28 1 -24 1 -18 L 1 -6 C 1 -2 4 0 9 0 L 50 0 C 53 0 54 -1 54 -3 Z'},SH);
+ S('body','path',{d:'M 64 -222 L 104 -172 L 86 -130',fill:'none'},null,{st:HD2,sw:30});
+ S('body','circle',{cx:86,cy:-127,r:16},SK);
+ S('body','path',{d:'M -60 -238 C -71 -238 -79 -228 -81 -216 L -92 -120 C -94 -105 -84 -96 -71 -96 L 71 -96 C 84 -96 94 -105 92 -120 L 81 -216 C 79 -228 71 -238 60 -238 Z'},HD);
+ S('body','path',{d:'M -42 -152 L 42 -152 L 50 -110 L -50 -110 Z'},HD2,{nosil:1});
+ S('body','path',{d:'M -16 -228 L -19 -192 M 16 -228 L 19 -192',fill:'none'},null,{st:'#E9EEF2',sw:5,nosil:1});
+ S('body','path',{d:'M 38 -168 V -204 a 9 9 0 0 1 18 0 V -160 a 13 13 0 0 1 -26 0 V -198',fill:'none'},null,{st:'#FF5A36',sw:5,nosil:1});   // a tiny paperclip on the hoodie
+ // raised arm with a pointer stick (arm-local: points straight up from the shoulder at 0°)
+ S('arm','path',{d:'M -60 -224 L -60 -332',fill:'none'},null,{st:HD,sw:30});
+ S('arm','path',{d:'M -60 -336 L -60 -458',fill:'none'},null,{st:HR,sw:9});
+ S('arm','circle',{cx:-60,cy:-340,r:17},SK);
+ // head (pivot at the neck)
+ S('head','circle',{cx:-80,cy:-312,r:15},SK);S('head','circle',{cx:80,cy:-312,r:15},SK);
+ S('head','circle',{cx:0,cy:-318,r:80},SK);
+ S('head','path',{d:'M -83 -306 C -88 -380 -42 -408 0 -406 C 48 -406 88 -382 84 -308 C 70 -334 46 -350 18 -354 C -2 -338 -32 -330 -56 -328 C -70 -324 -79 -316 -83 -306 Z'},HR);
+ S('head','path',{d:'M -4 -404 C -10 -432 10 -444 26 -434 C 12 -430 5 -420 7 -404 Z'},HR);
+ S('head','circle',{cx:-30,cy:-306,r:23},'rgba(255,255,255,.35)',{st:HR,sw:6,nosil:1});S('head','circle',{cx:30,cy:-306,r:23},'rgba(255,255,255,.35)',{st:HR,sw:6,nosil:1});
+ S('head','path',{d:'M -8 -309 Q 0 -314 8 -309',fill:'none'},null,{st:HR,sw:5,nosil:1});
+ S('head','ellipse',{cx:-30,cy:-305,rx:6.5,ry:9},HR,{nosil:1});S('head','ellipse',{cx:30,cy:-305,rx:6.5,ry:9},HR,{nosil:1});
+ S('head','circle',{cx:-27.5,cy:-309,r:2.6},'#fff',{nosil:1});S('head','circle',{cx:32.5,cy:-309,r:2.6},'#fff',{nosil:1});
+ S('head','ellipse',{cx:-55,cy:-274,rx:12,ry:7},'rgba(255,120,96,.55)',{nosil:1});S('head','ellipse',{cx:55,cy:-274,rx:12,ry:7},'rgba(255,120,96,.55)',{nosil:1});
+ S('head','path',{d:'M -16 -270 L 16 -270 Q 15 -249 0 -249 Q -15 -249 -16 -270 Z'},HR,{nosil:1});
+ S('head','path',{d:'M -8 -256 Q 0 -262 8 -256 Q 5 -250 0 -250 Q -5 -250 -8 -256 Z'},'#FF7A66',{nosil:1});
+ const at=o=>Object.entries(o).map(([k,v])=>`${k}="${v}"`).join(' ');
+ const pass=(g,sil)=>G[g].filter(o=>!(sil&&o.nosil)).map(o=>{const st=o.st;
+  if(sil)return`<${o.tag} ${at(o.at)} fill="${st?'none':'#F7F9FB'}" stroke="#F7F9FB" stroke-width="${(o.sw||0)+2*OW}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  return`<${o.tag} ${at(o.at)} ${o.fill?`fill="${o.fill}"`:''} ${st?`stroke="${st}" stroke-width="${o.sw}" stroke-linecap="round" stroke-linejoin="round"`:''}/>`;}).join('');
+ const ORD=['body','arm','head'];
+ const cd=el('div','a',screen,`z-index:22;left:${V5C.x-170}px;top:${V5C.y-600}px;width:340px;height:640px;transform-origin:170px 600px;opacity:0`,
+  `<svg width="340" height="640" style="overflow:visible"><g transform="translate(170 600)">${ORD.map(g=>`<g data-g="${g}">${pass(g,1)}</g>`).join('')}${ORD.map(g=>`<g data-g="${g}">${pass(g,0)}</g>`).join('')}</g></svg>`);
+ V5X.ch={d:cd,g:k=>[...cd.querySelectorAll(`g[data-g="${k}"]`)]};V5X.ch.arm=V5X.ch.g('arm');V5X.ch.head=V5X.ch.g('head');V5X.ch.body=V5X.ch.g('body');
+ // the dot
+ V5X.dot=el('div','a',screen,`z-index:21;left:0;top:0;width:${2*V5DOT.Rf}px;height:${2*V5DOT.Rf}px;border-radius:50%;background:#FF5A36;box-shadow:0 0 0 ${V5DOT.RW}px #F7F9FB;opacity:0;transform-origin:50% 50%`);
+ V5X.ePath=sv('path',{},sv('defs',{},esvg));
+ U.push((t,C,W)=>{const s=V5S_.s;
+  V5X.title.forEach(o=>{const sl=slap(t,o.land,.18,.34);o.d.style.opacity=NOLINK.has('title')?0:sl.o;o.d.style.transform=`rotate(${(o.rot+sl.r).toFixed(3)}deg) scale(${sl.s.toFixed(4)})`;o.d.style.filter=shadow(sl.lift*.9);});
+  {const sl=slap(s,V5C.land,.2,.2),w=wob(s-V5C.land,4,9)*(s>=V5C.land?1:0);cd.style.opacity=NOLINK.has('character')?0:sl.o;
+   cd.style.transform=`rotate(${(sl.r*1.4).toFixed(3)}deg) scale(${(V5C.sc*sl.s*(1+.035*w)).toFixed(4)},${(V5C.sc*sl.s*(1-.05*w)).toFixed(4)})`;cd.style.filter=shadow(sl.lift*.8);
+   const idle=s>.7?1:oC(P(s,.4,.3)),b=-3.2*Math.sin(2*Math.PI*1.05*(s-.4))*idle,sw=oB(P(s,.44,.3),1.7),th=lerp(-158,-16,sw)+2.2*Math.sin(2*Math.PI*1.5*(s-.74))*oC(P(s,.74,.3));
+   V5X.ch.arm.forEach(g=>g.setAttribute('transform',`translate(0 ${b.toFixed(2)}) rotate(${th.toFixed(2)} -60 -224)`));
+   V5X.ch.head.forEach(g=>g.setAttribute('transform',`translate(0 ${(b*1.25).toFixed(2)}) rotate(${(3.5*Math.sin(2*Math.PI*.55*(s-.3))*idle+(1-sw)*-4).toFixed(2)} 0 -238)`));
+   V5X.ch.body.forEach(g=>g.setAttribute('transform',`translate(0 ${(b*.35).toFixed(2)})`));}
+  {const q=v5PhoneDot(t);V5X.dot.style.opacity=NOLINK.has('dot')?0:q.o;V5X.dot.style.transform=`translate(${(q.x-V5DOT.Rf).toFixed(2)}px,${(q.y-V5DOT.Rf).toFixed(2)}px) scale(${q.k.toFixed(4)})`;V5X.dot.style.filter=shadow(q.lift*.8,.3);}
+  [subEn,rule,aNote].forEach((e,i)=>{const q=oC(P(s,.5+i*.08,.4));e.style.opacity=q;e.style.transform=i===1?`scaleX(${oQ(P(s,.58,.5))})`:i?`translateY(${(1-q)*14}px)`:`translateX(${(1-q)*-30}px)`;});
+  if(NOLINK.has('dot')){pin.style.opacity=0;pinRing.style.opacity=0;eDot.style.opacity=0;eRing.style.opacity=0;}
+  if(NOLINK.has('phone'))phone.style.opacity=0;
+  if(NOLINK.has('leader')){PARTS[4].line.style.opacity=0;PARTS[4].dot.style.opacity=0;}
+  if(NOLINK.has('n70'))eStk.style.opacity=0;});
+}
+// measure the title stickers' ink boxes (canvas) and place them: die-cut box = ink box + pad all round
+function v5Layout(){const cv=document.createElement('canvas').getContext('2d');let x=V5T.x;
+ V5X.title.forEach(o=>{cv.font=`1000 ${V5T.fs}px "Alibaba PuHuiTi"`;cv.letterSpacing=V5T.ls+'px';const m=cv.measureText(o.txt);
+  const L=m.actualBoundingBoxLeft,R=m.actualBoundingBoxRight,A=m.actualBoundingBoxAscent,D=m.actualBoundingBoxDescent,p=V5T.pad;
+  o.w=L+R+2*p;o.h=A+D+2*p;o.left=x-p;o.topY=V5T.top-p;[o.back,o.front].forEach(e=>{e.setAttribute('x',(p+L).toFixed(2));e.setAttribute('y',(p+A).toFixed(2));});
+  o.d.style.left=o.left.toFixed(1)+'px';o.d.style.top=o.topY.toFixed(1)+'px';o.d.style.width=o.w.toFixed(1)+'px';o.d.style.height=o.h.toFixed(1)+'px';
+  o.cx=o.left+o.w/2;o.cy=o.topY+o.h/2;o.ink=A+D;x+=L+R+V5T.gap+2*p;});
+ cv.font='900 400px Inter';cv.letterSpacing='-20px';const m=cv.measureText('70');V5X.n70={A:m.actualBoundingBoxAscent,D:m.actualBoundingBoxDescent};}
+// window.linkAt(t): pure in source time t, 1920x1080 frame px
+function v5Links(t0){const t=SHW(V5W(t0)),C=cam(t),W=worldM(t,C),k=C.z*W.ls,out=[],M=W.m,ang=Math.atan2(M[1],M[0])*180/Math.PI;
+ const onF=(x,y,r)=>x>-r&&x<1920+r&&y>-r&&y<1080+r;
+ const DOT=(x,y,r,a,note,sw)=>({id:'dot',type:'circle',x:+x.toFixed(1),y:+y.toFixed(1),r:+r.toFixed(2),a:+a.toFixed(3),look:'sticker',fill:'#FF5A36',stroke:'#F7F9FB',sw:+sw.toFixed(2),note});
+ // dot: phone sticker (t<6.45) -> 深圳 pin (6.45..7.96) -> end-card contrail start dot (>=7.96); r = outer edge incl. the white ring
+ if(t<EV.pin){const q=v5PhoneDot(t),[x,y]=mapW(M,q.x,q.y),r=(V5DOT.Rf+V5DOT.RW)*q.k*k;out.push(DOT(x,y,r,onF(x,y,r)?q.o:0,'round orange die-cut sticker on the phone sticker (white ring sw, drop shadow)',V5DOT.RW*q.k*k));}
+ else if(t<EV.endline[0]){const pu=P(t,EV.pin,.3),sc=pu>0?oB(pu,2):0,[x,y]=mapW(M,DEST[0],DEST[1]),r=34*sc*k;out.push(DOT(x,y,Math.max(0,r),pu>0&&onF(x,y,r)?1:0,'深圳 map pin: orange disc + white ring + shadow',8*sc*k));}
+ else{const eS=1+.02*(u=>u*u*(3-u)/2)(P(t,8.5,1.5)),toE=p=>[EX+(p[0]-EX)/eS,EB+(p[1]-W.J-EB)/eS],eWm=eW||eNum.getComputedTextLength();
+  const S=toE(mapW(M,CB.x+146,CB.y+166)),G=[EX+eWm/2,EB-146],a0=mapW(M,2640,0),a1=mapW(M,2640,5900),kq=(680-a0[1])/(a1[1]-a0[1]),Ep=toE([lerp(a0[0],a1[0],kq),680]);
+  const q1=[lerp(S[0],Ep[0],.55),Ep[1]+30],kk=(lerp(Ep[0],G[0],.42)-Ep[0])/Math.max(1,Ep[0]-q1[0]),q2=[Ep[0]+(Ep[0]-q1[0])*kk,Ep[1]+(Ep[1]-q1[1])*kk],f1=v=>v.toFixed(1);
+  V5X.ePath.setAttribute('d',`M${f1(S[0])} ${f1(S[1])} Q${f1(q1[0])} ${f1(q1[1])} ${f1(Ep[0])} ${f1(Ep[1])} Q${f1(q2[0])} ${f1(q2[1])} ${f1(G[0])} ${f1(G[1])}`);
+  const Lt=V5X.ePath.getTotalLength(),Dp=V5X.ePath.getPointAtLength(Math.min(58,Lt*.1)),rr=EDR*oB(P(t,EV.endline[0],.25),2);
+  out.push(DOT(EX+(Dp.x-EX)*eS,EB+(Dp.y-EB)*eS+W.J,(rr+2.5)*eS,1,'end-card contrail start dot (round sticker, white ring, shadow)',5*eS));
+  if(t>=EV.slam){const dt=t-EV.slam,fl=oC(P(dt,.35,.8)),sc=(1+.1*wob(dt,4.2,7.7)+.006*Math.sin(dt*2.4)*fl)*eS,cx=EX+(G[0]-EX)*eS,cy=EB+(G[1]-4*Math.sin(dt*2.4)*fl-EB)*eS+W.J,N=V5X.n70;
+   out.push({id:'n70',type:'rect',x:+cx.toFixed(1),y:+(cy+(146-N.A+(N.A+N.D)/2)*sc).toFixed(1),w:+((eWm+30)*sc).toFixed(1),h:+((N.A+N.D+30)*sc).toFixed(1),rot:+(-2+1.4*wob(dt,3,7)+.35*Math.sin(dt*1.8)*fl).toFixed(2),a:NOLINK.has('n70')?0:1,note:'hero 70 sticker (orange, 15 px white outline)'});}}
+ // title lockup (union of both stickers), character, phone sticker, 屏幕 leader line
+ {const b=[1e9,1e9,-1e9,-1e9];let a=0;V5X.title.forEach(o=>{const sl=slap(t,o.land,.18,.34);a=Math.max(a,sl.o);[[o.left,o.topY],[o.left+o.w,o.topY+o.h]].forEach(([x,y])=>{const[X,Y]=mapW(M,x,y);b[0]=Math.min(b[0],X);b[1]=Math.min(b[1],Y);b[2]=Math.max(b[2],X);b[3]=Math.max(b[3],Y);});});
+  if(a>0&&b[3]>0&&b[1]<1080&&b[3]-b[1]>80)out.push({id:'title',type:'rect',x:+((b[0]+b[2])/2).toFixed(1),y:+((b[1]+b[3])/2).toFixed(1),w:+(b[2]-b[0]).toFixed(1),h:+(b[3]-b[1]).toFixed(1),rot:+ang.toFixed(2),a:NOLINK.has('title')?0:+a.toFixed(3),note:'「贴纸人科普」 die-cut title stickers'});}
+ {const sl=slap(t0,V5C.land,.2,.2),[x,y]=mapW(M,V5C.x+12,V5C.y-193),h=410*k;if(sl.o>0&&h>120&&y-h/2<1080&&y+h/2>0)out.push({id:'character',type:'rect',x:+x.toFixed(1),y:+y.toFixed(1),w:+(225*k).toFixed(1),h:+h.toFixed(1),rot:+ang.toFixed(2),a:NOLINK.has('character')?0:+sl.o.toFixed(3),note:'贴纸人 sticker character (body box, pointer stick excluded)'});}
+ {const q=phonePose(t),[x,y]=mapW(M,q.cx,q.cy),w=meta.phone.w*q.sx*k,h=meta.phone.h*q.sy*k;if(h>200&&onF(x,y,Math.max(w,h)/2))out.push({id:'phone',type:'rect',x:+x.toFixed(1),y:+y.toFixed(1),w:+w.toFixed(1),h:+h.toFixed(1),rot:+(q.r+ang).toFixed(2),a:NOLINK.has('phone')?0:1,note:'phone photo sticker (white outline)'});}
+ {const p=PARTS[4],lu=oC(P(t,p.lt,.28));if(lu>0&&t<7){const[x0,y0]=mapW(M,p.an[0],p.an[1]),[x1,y1]=mapW(M,lerp(p.an[0],p.end[0],lu),p.end[1]);if(onF(x0,y0,0)||onF(x1,y1,0))out.push({id:'leader',type:'line',x0:+x0.toFixed(1),y0:+y0.toFixed(1),x1:+x1.toFixed(1),y1:+y1.toFixed(1),w:+(4*k).toFixed(2),a:NOLINK.has('leader')?0:1,note:'屏幕 DISPLAY leader line (slate, 4 world px)'});}}
+ return out;}
+// ---------- frame ----------
+const dotsEl=document.getElementById('dots');
+// camera motion blur inside each harness sample: 4 affine taps (pan offset + radial zoom via displacement map) spread over
+// one sample interval, then a small speed-proportional gaussian -> fuses the discrete samples on whips and on the pull-out
+const camEl=document.getElementById('cam'),mbg=document.getElementById('mbg'),MBN=12,SH=.5,RM=1100,DL=SH/MBN;
+{const cv=document.createElement('canvas');cv.width=2150;cv.height=1210;const g=cv.getContext('2d'),im=g.createImageData(2150,1210),d=im.data;
+ for(let y=0;y<1210;y++)for(let x=0;x<2150;x++){const o=(y*2150+x)*4;d[o]=Math.round(255*(.5+(x-115-960)/(2*RM)));d[o+1]=Math.round(255*(.5+(y-65-540)/(2*RM)));d[o+2]=0;d[o+3]=255;}
+ g.putImageData(im,0,0);const url=cv.toDataURL('image/png');document.getElementById('zmap').setAttribute('href',url);
+ const pre=new Image();pre.src=url;await pre.decode();}
+const MO=[0,1,2,3].map(k=>document.getElementById('mo'+k)),MD=[0,1,2,3].map(k=>document.getElementById('md'+k));
+function camVel(t){const h=1/60,A=cam(Math.max(0,t-h)),B=cam(Math.min(10,t+h));
+  return{vx:(A.x-B.x)*B.z,vy:(A.y-B.y)*B.z,g:Math.log(B.z/A.z)};}   // px/frame at screen centre, log-zoom per frame
+function camSigma(t){const{vx,vy,g}=camVel(t),k=.8*DL/4,vz=620*Math.abs(g);return[Math.hypot(vx*k,vz*k),Math.hypot(vy*k,vz*k)];}
+window.__camSigma=camSigma;
+function camBlur(t){const{vx,vy,g}=camVel(t),sp=Math.max(Math.abs(vx),Math.abs(vy),620*Math.abs(g))*DL;
+  if(sp<1.2){camEl.style.filter='none';return;}
+  [-.375,-.125,.125,.375].forEach((f,k)=>{const h=f*DL;MO[k].setAttribute('dx',(h*vx).toFixed(3));MO[k].setAttribute('dy',(h*vy).toFixed(3));
+    MD[k].setAttribute('scale',(-2*RM*h*g).toFixed(4));});
+  const[sx,sy]=camSigma(t);mbg.setAttribute('stdDeviation',`${Math.min(6,sx).toFixed(2)} ${Math.min(6,sy).toFixed(2)}`);camEl.style.filter='url(#mbf)';}
+const bezel=document.getElementById('bezel');
+// stage-2 pull: effective shutter .3 instead of .5 (sub-samples squeezed toward the frame centre; pure in t)
+const SHW=t=>{const tf=Math.round(t*30)/30;return(tf>7.69&&tf<7.89)?tf+(t-tf)*.36:t;};
+window.renderAt=async(t0)=>{const t=SHW(V5W(t0)),C=cam(t),W=worldM(t,C);V5S_.s=t0;
+ world.style.transform=`matrix(${W.m.map(v=>v.toFixed(6)).join(',')})`;
+ {const z=C.z*W.ls,L=W.L;bezel.style.boxShadow=`0 0 0 ${(Math.max(46,14/z)*(1+.45*L)).toFixed(1)}px #F7F9FB,0 ${(lerp(8,30,L)/z).toFixed(1)}px ${(lerp(14,56,L)/z).toFixed(1)}px rgba(4,8,12,${lerp(.5,.34,L).toFixed(3)}),0 ${(30/z).toFixed(1)}px ${(110/z).toFixed(1)}px rgba(4,8,12,.3)`;}
+ camBlur(t);
+ dotsEl.style.opacity=clamp((C.z-.3)/.35);
+ for(const f of U)f(t,C,W);};
+await document.fonts.ready;
+for(const w of ['400','500','700','900','1000'])await document.fonts.load(`${w} 60px "Alibaba PuHuiTi"`,'一部手机藏着多少种元素');
+for(const w of ['500','600','700','800','900'])await document.fonts.load(`${w} 60px "Inter"`,'0123456789/ABC');
+await Promise.all([...document.images].map(i=>i.decode().catch(()=>{})));
+if(V5){await document.fonts.load('1000 212px "Alibaba PuHuiTi"','贴纸人科普');await document.fonts.load('700 34px "Inter"','STICKER EXPLAINER');await document.fonts.load('900 400px "Inter"','70');v5Layout();window.linkAt=v5Links;}
+await window.renderAt(7.2);await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+await window.renderAt(0);
+window.__ready=true;
+</script></body></html>

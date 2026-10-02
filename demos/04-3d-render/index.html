@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>soft. — 04-3d-render</title>
+<link rel="stylesheet" href="/assets/fonts/fonts.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #000; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #efe2ea; }
+  #plate { position: absolute; inset: 0; width: 1920px; height: 1080px; display: block; }
+  /* finishing: soft vignette + filmic grain (boiled per frame) */
+  #vig { position: absolute; inset: 0; pointer-events: none;
+         background: radial-gradient(ellipse 72% 70% at 50% 47%, rgba(0,0,0,0) 55%, rgba(58,30,66,0.20) 100%);
+         mix-blend-mode: multiply; }
+  #grain { position: absolute; inset: -64px; pointer-events: none; opacity: .09; mix-blend-mode: overlay;
+           background: url('/assets/textures/grain/grain_fine_2048.png'); background-size: 1024px 1024px; }
+  /* tagline lockup */
+  #lock { position: absolute; left: 0; right: 0; top: 792px; text-align: center; color: #4a2e4e; }
+  .en { font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 32px; letter-spacing: .26em;
+        text-transform: uppercase; font-variation-settings: 'opsz' 14; line-height: 1; white-space: nowrap; }
+  .en .w { display: inline-block; will-change: transform, filter, opacity; }
+  .rule { width: 64px; height: 2px; margin: 22px auto 21px; background: #4a2e4e; opacity: .55; transform-origin: 50% 50%; }
+  .zh { font-family: 'Noto Sans SC', sans-serif; font-weight: 500; font-size: 30px; letter-spacing: .36em;
+        line-height: 1; white-space: nowrap; }
+  .trail { margin-right: -.26em; }      /* cancel trailing tracking so lines are optically centred */
+  .zh .trail2 { margin-right: -.36em; }
+  .zh .gap { display: inline-block; width: .9em; }
+  /* r1: lilac ellipse scrim, 55 % core, ~60 px feather */
+  #scrim { position: absolute; left: 400px; top: 722px; width: 1120px; height: 250px; pointer-events: none;
+           background: radial-gradient(closest-side, rgba(239,230,248,.55) 62%, rgba(239,230,248,0) 100%);
+           filter: blur(14px); opacity: 0; }
+  /* r2: foreground fall-off = full-width progressive blur keyed to screen y (0 px above 700 -> ~6 px from 820 down),
+     three stacked backdrop blurs with staggered linear masks (blurs compound: 2.5 / 3.6 / 6.1 px) */
+  .dofl { position: absolute; left: 0; width: 1920px; bottom: 0; pointer-events: none; opacity: 0; }
+  #dof1 { top: 700px; backdrop-filter: blur(2.5px); -webkit-backdrop-filter: blur(2.5px);
+          -webkit-mask-image: linear-gradient(#0000 0, #000 50px); mask-image: linear-gradient(#0000 0, #000 50px); }
+  #dof2 { top: 730px; backdrop-filter: blur(2.6px); -webkit-backdrop-filter: blur(2.6px);
+          -webkit-mask-image: linear-gradient(#0000 0, #000 50px); mask-image: linear-gradient(#0000 0, #000 50px); }
+  #dof3 { top: 765px; backdrop-filter: blur(4.9px); -webkit-backdrop-filter: blur(4.9px);
+          -webkit-mask-image: linear-gradient(#0000 0, #000 55px); mask-image: linear-gradient(#0000 0, #000 55px); }
+  /* r1 grade: display-space S-curve (darks down, mids to ~180-215, speculars kept) — see #grade */
+  #plate { filter: url(#grade) saturate(1.08); transform-origin: 1280px 640px; }
+  #plate2 { position: absolute; inset: 0; width: 1920px; height: 1080px; display: block; opacity: 0;
+            filter: url(#opengrade) saturate(1.08); transform-origin: 1280px 640px; }
+  /* v5.1 (v5 look b, dark ink-teal bed): tagline goes pale over a soft ink scrim (the plum-on-lilac lockup would vanish) */
+  html.v5b #lock { color: #f4e8ef; }
+  html.v5b .rule { background: #f4e8ef; }
+  html.v5b #scrim { background: radial-gradient(closest-side, rgba(4,20,26,.55) 62%, rgba(4,20,26,0) 100%); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="grade" color-interpolation-filters="sRGB">
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+      <feFuncG type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+      <feFuncB type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+    </feComponentTransfer>
+  </filter>
+  <!-- r2: opening grade = upper-mid curve (the macro plate lives in 0.8-1.0: deepen the capsule gaps, keep the speculars) then the main grade; crossfaded out by 0.9 s -->
+  <filter id="opengrade" color-interpolation-filters="sRGB">
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0.0000 0.0312 0.0625 0.0938 0.1250 0.1562 0.1875 0.2188 0.2500 0.2812 0.3125 0.3438 0.3750 0.4048 0.4251 0.4435 0.4616 0.4803 0.5003 0.5221 0.5462 0.5729 0.6025 0.6350 0.6703 0.7083 0.7487 0.7909 0.8346 0.8789 0.9231 0.9658 1.0000"/><feFuncG type="table" tableValues="0.0000 0.0312 0.0625 0.0938 0.1250 0.1562 0.1875 0.2188 0.2500 0.2812 0.3125 0.3438 0.3750 0.4048 0.4251 0.4435 0.4616 0.4803 0.5003 0.5221 0.5462 0.5729 0.6025 0.6350 0.6703 0.7083 0.7487 0.7909 0.8346 0.8789 0.9231 0.9658 1.0000"/><feFuncB type="table" tableValues="0.0000 0.0312 0.0625 0.0938 0.1250 0.1562 0.1875 0.2188 0.2500 0.2812 0.3125 0.3438 0.3750 0.4048 0.4251 0.4435 0.4616 0.4803 0.5003 0.5221 0.5462 0.5729 0.6025 0.6350 0.6703 0.7083 0.7487 0.7909 0.8346 0.8789 0.9231 0.9658 1.0000"/>
+    </feComponentTransfer>
+    <feComponentTransfer>
+      <feFuncR type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+      <feFuncG type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+      <feFuncB type="table" tableValues="0 0.0175 0.035 0.0525 0.07 0.09 0.11 0.13 0.15 0.1712 0.1925 0.2137 0.235 0.2562 0.2775 0.2987 0.32 0.3425 0.365 0.3875 0.41 0.4325 0.455 0.4775 0.5 0.525 0.55 0.575 0.6 0.6275 0.655 0.6825 0.71 0.7438 0.7775 0.8112 0.845 0.905 0.96 0.985 1"/>
+    </feComponentTransfer>
+  </filter>
+</svg>
+<div id="stage">
+  <img id="plate" alt="">
+  <img id="plate2" alt="">
+  <div class="dofl" id="dof1"></div><div class="dofl" id="dof2"></div><div class="dofl" id="dof3"></div>
+  <div id="scrim"></div>
+  <div id="lock">
+    <div class="en" id="en"><span class="w">Softness</span>&nbsp;<span class="w">carries</span>&nbsp;<span class="w trail">weight</span></div>
+    <div class="rule" id="rule"></div>
+    <div class="zh" id="zh"><span>柔软</span><span class="gap"></span><span class="trail2">自有分量</span></div>
+  </div>
+  <div id="vig"></div>
+  <div id="grain"></div>
+</div>
+<script>
+const q = new URLSearchParams(location.search);
+// reel v5 (?v5=1): plates re-rendered with the clay title 3D渲染 (out/v5/frames), window.linkAt(t) for the chrome period,
+// ?nolink=dot -> plates rendered without the ball, its shadow and reflections (out/v5/frames_nolink). Off by default.
+const V5 = q.get('v5') === '1';
+const NOLINK = new Set(V5 ? (q.get('nolink') || '').split(',').filter(Boolean) : []);
+// v5.1: default v5 look = 'b' (ink-teal capsule bed, out/v5b); ?v5look=a -> the v5.0 lilac-bed plates (out/v5)
+const V5DIR = V5 ? (q.get('v5look') === 'a' ? 'v5' : 'v5b') : '';
+if (V5DIR === 'v5b') document.documentElement.classList.add('v5b');
+const FRAMES = q.get('frames') || (V5 ? (NOLINK.has('dot') ? `${V5DIR}/frames_nolink` : `${V5DIR}/frames`) : 'frames');
+const FPS = 24, N = 240;
+window.DEMO = { width: 1920, height: 1080, fps: FPS, duration: 10, motionBlur: { samples: 1, shutter: 0.5 } };
+
+let CUES = null;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const expoOut = (u) => (u >= 1 ? 1 : 1 - Math.pow(2, -10 * u));
+const quartOut = (u) => 1 - Math.pow(1 - u, 4);
+function prog(t, t0, dur) { return clamp((t - t0) / dur); }
+// seeded per-frame hash for grain offsets
+function hash(i) { let x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+const plate = document.getElementById('plate');
+const words = [...document.querySelectorAll('.en .w')];
+const rule = document.getElementById('rule');
+const zh = document.getElementById('zh');
+const grain = document.getElementById('grain');
+const scrim = document.getElementById('scrim');
+const dofs = [...document.querySelectorAll('.dofl')];
+const vig = document.getElementById('vig');
+const plate2 = document.getElementById('plate2');
+const smooth = (u) => { u = clamp(u); return u * u * (3 - 2 * u); };
+const cache = new Map();
+
+function loadFrame(i) {
+  const src = `/demos/04-3d-render/out/${FRAMES}/${String(i).padStart(4, '0')}.png`;
+  if (plate.dataset.src === src) return Promise.resolve();
+  plate.dataset.src = src;
+  const dec = (im) => { im.src = src; return im.decode().catch(() => new Promise((res) => { im.onload = res; im.onerror = res; })); };
+  return Promise.all([dec(plate), dec(plate2)]);
+}
+
+window.renderAt = async (t) => {
+  const i = Math.min(N - 1, Math.max(0, Math.round(t * FPS)));
+  await loadFrame(i);
+  const T0 = CUES.tagline;
+  // English line: words rise + unblur + track in, staggered, expo-out (long tail, like the camera)
+  words.forEach((w, k) => {
+    const u = prog(t, T0 + 0.07 * k, 0.9);
+    const e = expoOut(u);
+    w.style.opacity = String(clamp(u * 2.2));
+    w.style.transform = `translateY(${(1 - e) * 14}px)`;
+    w.style.filter = `blur(${(1 - e) * 7}px)`;
+    w.style.letterSpacing = `${0.26 + (1 - e) * 0.2}em`;
+  });
+  const ur = expoOut(prog(t, T0 + 0.22, 0.8));
+  rule.style.transform = `scaleX(${ur})`;
+  rule.style.opacity = String(0.55 * clamp(ur * 1.5));
+  const uz = prog(t, T0 + 0.30, 0.9), ez = expoOut(uz);
+  zh.style.opacity = String(clamp(uz * 2.0));
+  zh.style.transform = `translateY(${(1 - ez) * 10}px)`;
+  zh.style.filter = `blur(${(1 - ez) * 6}px)`;
+  scrim.style.opacity = String(quartOut(prog(t, T0 - 0.1, 1.0)));
+  const od = String(quartOut(prog(t, T0 - 0.2, 1.2)));   // reads as a rack: the foreground softens as the type arrives
+  dofs.forEach((d) => { d.style.opacity = od; });
+  // r1 hero punch: frame 144 (first contact frame) scale 1.035 -> 1.0 over 6 frames (expo-out) + 2 px vertical shake over 4 frames
+  const fh = Math.round(CUES.hero * FPS), df = i - fh;
+  const pun = df >= 0 ? 0.035 * (1 - expoOut(df / 6)) : 0;
+  const shk = [2, -1.5, 1, -0.5][df] || 0;
+  // r2 s3: end-hold creep — the plate keeps pushing ~1.2 % toward the lockup axis (ease-in from 8.4, then constant speed
+  // to the last frame) so the end hold breathes instead of settling to a dead stop (QC static span 9.54–10.0 before)
+  const tc = t - 8.4, crp = tc <= 0 ? 0 : 0.0092 * (tc < 0.6 ? tc * tc / 1.2 : tc - 0.3);
+  const org = t >= 8.0 ? '960px 560px' : '1280px 640px';   // switch while scale is exactly 1 (punch long over, creep not started)
+  plate.style.transformOrigin = org; plate2.style.transformOrigin = org;
+  plate.style.transform = `translateY(${shk}px) scale(${1 + pun + crp})`;
+  const op = 1 - smooth((t - 0.6) / 0.3);
+  plate2.style.transform = plate.style.transform;
+  plate2.style.opacity = String(op);   // lerp to the darker opening grade
+  vig.style.background = `radial-gradient(ellipse 72% 70% at 50% 47%, rgba(0,0,0,0) ${55 - 8 * op}%, rgba(58,30,66,${(0.20 + 0.12 * op).toFixed(3)}) 100%)`;
+
+  // grain boil: new seeded offset every frame
+  grain.style.transform = `translate(${Math.round(hash(i) * 64 - 32)}px, ${Math.round(hash(i + 999) * 64 - 32)}px)`;
+};
+
+// ---- v5 link element: the chrome period, projected per frame in Blender (blender/dot_track.py -> out/v5/dot_track.json,
+// silhouette of the sphere through the animated camera, plate px) and pushed through the same plate transform renderAt uses
+// (hero punch + shake about 1280/640, end-hold creep about 960/560). Pure function of t: the plate frame is round(t*24).
+let DOT = null;
+function v5PlateXf(t, i) {
+  const fh = Math.round(CUES.hero * FPS), df = i - fh;
+  const pun = df >= 0 ? 0.035 * (1 - expoOut(df / 6)) : 0;
+  const shk = [2, -1.5, 1, -0.5][df] || 0;
+  const tc = t - 8.4, crp = tc <= 0 ? 0 : 0.0092 * (tc < 0.6 ? tc * tc / 1.2 : tc - 0.3);
+  const o = t >= 8.0 ? [960, 560] : [1280, 640];
+  const s = 1 + pun + crp;
+  return (x, y) => [o[0] + s * (x - o[0]), o[1] + shk + s * (y - o[1]), s];
+}
+function v5LinkAt(t) {
+  const i = Math.min(N - 1, Math.max(0, Math.round(t * FPS)));
+  const fr = DOT.frames[i], xf = v5PlateXf(t, i);
+  // before the ball drops into frame (parked 20 u above the set) report where it will enter: just above the top edge, a = 0
+  const d = i < DOT.entry ? [DOT.frames[DOT.entry].dot[0], -DOT.frames[DOT.entry].dot[2], DOT.frames[DOT.entry].dot[2]] : fr.dot;
+  const [x, y, s] = xf(d[0], d[1]), r = d[2] * s;
+  const onscreen = i >= DOT.entry && x + r > 0 && x - r < 1920 && y + r > 0 && y - r < 1080;
+  const out = [{ id: 'dot', type: 'circle', x: +x.toFixed(1), y: +y.toFixed(1), r: +r.toFixed(1), a: onscreen ? 1 : 0, look: 'sphere',
+    ...(V5DIR === 'v5b' ? { fill: '#725f6a', stroke: '#091015', sw: 0, grad: ['#bdacb8', '#091015'] }      // v5.1: pastel sky on top, ink-teal bed below
+                        : { fill: '#b4a4be', stroke: '#6f5f7e', sw: 0, grad: ['#eee6f0', '#7d6a8e'] }),
+    note: 'chrome ball = the full stop of 3D渲染 (Cycles mirror sphere; drops in through the top edge at 5.50 s, hangs 5.80-5.93, slams 5.975, rests ~12 % sunk in the capsule bed' + (V5DIR === 'v5b' ? ', ink-teal bed in v5.1' : '') + ')' }];
+  if (t >= 2.62) {       // title block once 染 has landed (clay glyphs 3 D 渲 染, evaluated-mesh screen bbox)
+    const [x0, y0] = xf(fr.title[0], fr.title[1]), [x1, y1] = xf(fr.title[2], fr.title[3]);
+    out.push({ id: 'title', type: 'rect', x: +((x0 + x1) / 2).toFixed(1), y: +((y0 + y1) / 2).toFixed(1), w: +(x1 - x0).toFixed(1), h: +(y1 - y0).toFixed(1), rot: 0,   // x,y = centre
+      a: t > 6.02 && t < 7.0 ? 0.6 : 1, fill: '#ff5aa6', note: 'the 3D clay title 3D渲染 (pink SSS gummy); a<1 while the capsule crown crosses it' });
+  }
+  return out;
+}
+
+(async () => {
+  CUES = await (await fetch('/demos/04-3d-render/cues.json')).json();
+  if (V5) {
+    DOT = await (await fetch(`/demos/04-3d-render/out/${V5DIR}/dot_track.json`)).json();
+    DOT.entry = DOT.frames.findIndex((f) => f.dot[1] + f.dot[2] > 0 && f.dot[4] < 15);   // first frame the ball is in frame
+    window.linkAt = v5LinkAt;
+  }
+  await document.fonts.load("600 21px 'DM Sans'", 'SOFTNESS CARRIES WEIGHT');
+  await document.fonts.load("500 20px 'Noto Sans SC'", '柔软自有分量');
+  await document.fonts.ready;
+  await new Promise((r) => { const g = new Image(); g.onload = r; g.onerror = r; g.src = '/assets/textures/grain/grain_fine_2048.png'; });
+  await window.renderAt(0);
+  window.__ready = true;
+})();
+</script>
+</body>
+</html>

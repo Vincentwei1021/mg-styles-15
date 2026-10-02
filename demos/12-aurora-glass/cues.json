@@ -1,0 +1,67 @@
+{
+ "fps": 30,
+ "duration": 10.0,
+ "bpm": 80,
+ "key": "E",
+ "_grid": "80 bpm, beat = 0.75 s, bar = 3.0 s; bar 0 of the grid starts at the drop (6.0 s)",
+ "cardA_in": -0.8,
+ "cardB_in": -0.3,
+ "cardC_in": 0.05,
+ "cardA_land": 1.5,
+ "user_bubble": 0.0,
+ "typing": 0.7,
+ "reply": [
+  1.5,
+  1.875,
+  2.25,
+  2.625
+ ],
+ "chips": 3.0,
+ "voice_on": 0.45,
+ "toggle_on": 3.75,
+ "slider": [
+  3.95,
+  4.85
+ ],
+ "knob_press": 4.5,
+ "knob_glass": 4.62,
+ "drop": 6.0,
+ "word": 6.9,
+ "word_letters": 0.075,
+ "orb_settle": 8.25,
+ "tagline": 8.5,
+ "end": 10.0,
+ "part": [
+  6.72,
+  6.95,
+  7.3
+ ],
+ "bead": 4.8,
+ "lens_full": 5.95,
+ "glide": [
+  5.95,
+  6.9
+ ],
+ "lens_free": 6.9,
+ "knob_swell": 4.62,
+ "snap": 5.45,
+ "gold": [
+  6.0,
+  6.45
+ ],
+ "a_hold": [
+  7.38,
+  7.8
+ ],
+ "a_clear": 8.15,
+ "ring_open": [
+  7.75,
+  8.3
+ ],
+ "wave": 9.0,
+ "ring_glint": [
+  9.1,
+  9.6
+ ],
+ "final_note": 9.1
+}

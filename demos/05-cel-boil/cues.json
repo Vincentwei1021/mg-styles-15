@@ -1,0 +1,157 @@
+{
+ "fps": 24,
+ "duration": 10.0,
+ "bpm": 120,
+ "bar_anchor": 0.5,
+ "comment": "All times in seconds, all on exact 24 fps frames. 120 bpm: beat = 12 frames, 16th = 3 frames. Bar lines 0.5, 2.5, 4.5, 6.5, 8.5.",
+ "exposure": [
+  [
+   0.0,
+   0.333,
+   2,
+   "anticipation (on 2s)"
+  ],
+  [
+   0.333,
+   1.0,
+   1,
+   "strike smear + flip (on 1s)"
+  ],
+  [
+   1.0,
+   2.0,
+   2,
+   "flame wakes (on 2s)"
+  ],
+  [
+   2.0,
+   2.5,
+   1,
+   "jump (on 1s)"
+  ],
+  [
+   2.5,
+   4.5,
+   2,
+   "dance (on 2s)"
+  ],
+  [
+   4.5,
+   5.0,
+   3,
+   "ta-da hold (on 3s)"
+  ],
+  [
+   5.0,
+   5.5,
+   2,
+   "dance (on 2s)"
+  ],
+  [
+   5.5,
+   7.0,
+   1,
+   "spin wind-up + burst (on 1s)"
+  ],
+  [
+   7.0,
+   9.0,
+   2,
+   "FX re-form into title (on 2s; fuse sparks on 1s)"
+  ],
+  [
+   9.0,
+   10.0,
+   3,
+   "end hold boil (on 3s)"
+  ]
+ ],
+ "anticip": 0.0,
+ "strike_start": 0.333,
+ "strike_scrape": [
+  0.333,
+  0.458
+ ],
+ "ignite": 0.5,
+ "match_land": 1.0,
+ "eyes_open": 1.25,
+ "blink": 1.417,
+ "look_left": 1.5,
+ "look_right": 1.667,
+ "crouch": 1.75,
+ "jump": 2.0,
+ "land": 2.5,
+ "hops": [
+  3.0,
+  3.5,
+  4.0
+ ],
+ "twirl": [
+  3.75,
+  4.0
+ ],
+ "shimmy": [
+  4.083,
+  4.25,
+  4.417
+ ],
+ "tada": 4.5,
+ "sparkles": [
+  4.625,
+  4.75,
+  4.875
+ ],
+ "bounce": [
+  5.0,
+  5.25
+ ],
+ "spin_start": 5.5,
+ "squash": 6.25,
+ "burst": 6.5,
+ "impact_frames": [
+  6.5,
+  6.542
+ ],
+ "box_blown": 6.583,
+ "strokes": [
+  7.25,
+  7.375,
+  7.5,
+  7.625,
+  7.75,
+  7.875,
+  8.0,
+  8.125,
+  8.25,
+  8.375,
+  8.5
+ ],
+ "title_settle": 8.5,
+ "letters": [
+  8.583,
+  8.667,
+  8.75,
+  8.833
+ ],
+ "tagline": [
+  8.5,
+  8.833
+ ],
+ "spirit_pop": 9.125,
+ "wink": 9.708,
+ "end": 10.0,
+ "burst_debris": [
+  6.583,
+  6.667,
+  6.792
+ ],
+ "pullback": 9.083,
+ "loop": 9.083,
+ "riffle": [
+  9.333,
+  9.583
+ ],
+ "comment_r1": "R1 end: pull-back 8.917/9.0/9.083 (3 drawings on 2s), red loop 9.083-9.167, arrow 9.25, riffle f223-228 on 1s, back on top sheet 9.542, wink 9.667 (on 3s from f229).",
+ "arrow": 9.25,
+ "comment_r2": "R2 end: full lockup complete f212 (8.833) and held to f217; pull-back f218/220/222 (on 2s, 100->90->86->84 %), red loop f218-220, arrow f222, riffle f224-229 on 1s, back on top sheet f230, wink f233 (9.708) on 3s."
+}
