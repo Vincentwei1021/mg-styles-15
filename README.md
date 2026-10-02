@@ -6,7 +6,12 @@ Fifteen 10-second motion-design films, one style each, all made by Claude Opus 5
 animation, the music and the sound effects all come from code. This repository holds every film, a description of its style,
 the full prompt and the complete source.
 
-**Watch online: https://vincentwei1021.github.io/mg-styles-15/** (each film's video, style notes, prompt and source on one page)
+**Watch online: https://vincentwei1021.github.io/mg-styles-15/**
+
+[![The showcase page: the Frame-by-Frame film next to its style notes, with the prompt open below](docs/screenshot-en.jpg)](https://vincentwei1021.github.io/mg-styles-15/)
+
+Each style has its own section: the film, what the style is and how this film was made. Below it, the full prompt and a browser
+for every source file open with one click. The page switches between English and Chinese.
 
 | # | Style | Film | Prompt | Source |
 |---|---|---|---|---|
@@ -39,6 +44,7 @@ the full prompt and the complete source.
 | `lib/audio/` | mgaudio, the toolkit that synthesises the music and sound effects, plus the 103 instrument samples the 15 soundtracks use |
 | `assets/` | Textures and the HDRI the films share; a list of the fonts (the font files are not in the repository) |
 | `rubric.md`, `template.md` | A review prompt; a template for writing a prompt for a new style |
+| `docs/` | The screenshots in this README |
 
 ## Make a film from a prompt
 
