@@ -41,18 +41,18 @@ def _index():
         return json.load(f)
 
 
-@lru_cache(maxsize=None)
 def _on_disk(relpath):
-    return os.path.exists(os.path.join(ROOT, relpath))
+    # Downloads and removals must be visible without restarting the process.
+    return os.path.isfile(os.path.join(ROOT, relpath))
 
 
 def available(key=None):
     """Keys with at least one sample on disk. The repo ships only the samples the 15 soundtracks use; index.json
     describes the full VCSL selection (tools/fetch_missing_samples.py fetches the rest)."""
-    idx = {k: v for k, v in _index().items() if any(_on_disk(i['file']) for i in v)}
-    if key is None:
-        return sorted(idx.keys())
-    return key in idx
+    idx = _index()
+    if key is not None:
+        return any(_on_disk(i['file']) for i in idx.get(key, []))
+    return sorted(k for k, v in idx.items() if any(_on_disk(i['file']) for i in v))
 
 
 def _align_pair(x, maxlag=64):
@@ -121,7 +121,6 @@ class Instrument:
             raise RuntimeError(f'no samples for {key!r} (match={match!r})')
         self.key = key
         self.items = items
-        self.present = [i for i in items if _on_disk(i['file'])]
         if not self.present:
             raise RuntimeError(f'no samples on disk for {key!r} (match={match!r}); see tools/fetch_missing_samples.py')
         for i in items:
@@ -130,6 +129,11 @@ class Instrument:
         pk = [i['peak'] for i in items if i['_vel'] >= top - 1e-6]
         self.gain = 0.5 / (np.median(pk) + 1e-9)
         self._rr = 0
+
+    @property
+    def present(self):
+        """Currently available samples, including files added since construction."""
+        return [i for i in self.items if _on_disk(i['file'])]
 
     def _choose(self, items, m, vel):
         dist = np.array([abs(i['midi'] - m) for i in items])
@@ -143,8 +147,13 @@ class Instrument:
         m = midi(note)
         self._rr += 1
         it = self._choose(self.items, m, vel)
-        # index.json lists more samples than the repo ships: if the choice is not on disk, choose among those that are
-        return it if _on_disk(it['file']) else self._choose(self.present, m, vel)
+        # Keep full-index selection stable, but refresh the fallback set on each miss.
+        if _on_disk(it['file']):
+            return it
+        present = self.present
+        if not present:
+            raise RuntimeError(f'no samples on disk for {self.key!r}; see tools/fetch_missing_samples.py')
+        return self._choose(present, m, vel)
 
     def play(self, note, dur=None, vel=0.7, bend=None, release=0.3, stereo=True, tune_cents=0.0,
              attack=0.0, start=0.0):
