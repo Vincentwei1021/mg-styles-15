@@ -41,11 +41,18 @@ def _index():
         return json.load(f)
 
 
+@lru_cache(maxsize=None)
+def _on_disk(relpath):
+    return os.path.exists(os.path.join(ROOT, relpath))
+
+
 def available(key=None):
-    idx = _index()
+    """Keys with at least one sample on disk. The repo ships only the samples the 15 soundtracks use; index.json
+    describes the full VCSL selection (tools/fetch_missing_samples.py fetches the rest)."""
+    idx = {k: v for k, v in _index().items() if any(_on_disk(i['file']) for i in v)}
     if key is None:
         return sorted(idx.keys())
-    return key in idx and len(idx[key]) > 0
+    return key in idx
 
 
 def _align_pair(x, maxlag=64):
@@ -114,6 +121,9 @@ class Instrument:
             raise RuntimeError(f'no samples for {key!r} (match={match!r})')
         self.key = key
         self.items = items
+        self.present = [i for i in items if _on_disk(i['file'])]
+        if not self.present:
+            raise RuntimeError(f'no samples on disk for {key!r} (match={match!r}); see tools/fetch_missing_samples.py')
         for i in items:
             i['_vel'] = _vel_of(i['name'])
         top = max(i['_vel'] for i in items)
@@ -121,15 +131,20 @@ class Instrument:
         self.gain = 0.5 / (np.median(pk) + 1e-9)
         self._rr = 0
 
-    def pick(self, note, vel=0.7):
-        m = midi(note)
-        dist = np.array([abs(i['midi'] - m) for i in self.items])
+    def _choose(self, items, m, vel):
+        dist = np.array([abs(i['midi'] - m) for i in items])
         dmin = dist.min()
-        cands = [i for i, d in zip(self.items, dist) if d <= dmin + 0.6]
+        cands = [i for i, d in zip(items, dist) if d <= dmin + 0.6]
         vd = np.array([abs(i['_vel'] - vel) for i in cands])
         best = [c for c, v in zip(cands, vd) if v <= vd.min() + 1e-6]
-        self._rr += 1
         return best[self._rr % len(best)]
+
+    def pick(self, note, vel=0.7):
+        m = midi(note)
+        self._rr += 1
+        it = self._choose(self.items, m, vel)
+        # index.json lists more samples than the repo ships: if the choice is not on disk, choose among those that are
+        return it if _on_disk(it['file']) else self._choose(self.present, m, vel)
 
     def play(self, note, dur=None, vel=0.7, bend=None, release=0.3, stereo=True, tune_cents=0.0,
              attack=0.0, start=0.0):
@@ -205,6 +220,14 @@ def hit(key, match=None, vel=0.8, rr=None, stereo=True, gain_by_vel=True, pitch=
     k = (key, match)
     _hit_rr[k] = _hit_rr.get(k, -1) + 1
     it = cands[(_hit_rr[k] if rr is None else rr) % len(cands)]
+    if not _on_disk(it['file']):           # same choice among the samples that are on disk
+        items = [i for i in items if _on_disk(i['file'])]
+        if not items:
+            raise RuntimeError(f'no samples on disk for {key!r} match={match!r}; see tools/fetch_missing_samples.py')
+        vs = np.array([_vel_of(i['name']) for i in items])
+        d = np.abs(vs - vel)
+        cands = [i for i, dd in zip(items, d) if dd <= d.min() + 1e-6]
+        it = cands[(_hit_rr[k] if rr is None else rr) % len(cands)]
     x = np.asarray(load(it['file']), dtype=np.float64)
     if pitch:
         from .fx import repitch
