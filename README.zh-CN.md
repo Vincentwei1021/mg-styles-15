@@ -114,7 +114,7 @@ python3 -m http.server 8000                    # 预览：http://localhost:8000/
 | `demos/<名字>/` | 每支片的源码：画面代码（`index.html` 和 js）、配乐脚本 `audio.py`、时间点 `cues.json`，以及生成片中素材的脚本 |
 | `harness/render.mjs` | 渲染脚本：无头 Chrome 逐帧截图，ffmpeg 合成视频和音轨 |
 | `harness/preview.html` | 在浏览器里拖时间轴看任意一帧 |
-| `lib/audio/` | 配乐和音效的合成工具包 mgaudio，加上 15 支配乐用到的 103 个乐器采样 |
+| `lib/audio/` | 配乐和音效的合成工具包 mgaudio，加上 `samples/index.json` 描述的全部 598 个 VCSL 乐器采样（CC0，含钢琴、越南筝、竖琴、各类槌击乐器和手鼓等） |
 | `assets/` | 片子共用的纹理和 HDRI；字体清单（字体文件不在仓库里） |
 | `rubric.md`、`template.md` | 评审用的提示词；写一种新风格的模板 |
 | `docs/` | README 里的图：封面、流程图、成片预览和页面截图 |
@@ -125,7 +125,7 @@ python3 -m http.server 8000                    # 预览：http://localhost:8000/
 2. 仓库 Settings → Pages → Build and deployment，Source 选 Deploy from a branch，分支 `main`，目录 `/ (root)`。免费账号只能给公开仓库开 Pages。
 3. 一两分钟后打开 `https://<用户名>.github.io/<仓库名>/`。页面会自己识别仓库地址，「在 GitHub 查看」按钮直接跳到对应文件；用自定义域名时，在 `index.html` 的 `<meta name="repo">` 里填上仓库地址。
 
-整个站点约 575 MB，其中视频 420 MB。GitHub Pages 的站点上限是 1 GB，每月流量软上限 100 GB；视频只有点播放才会下载。
+整个站点约 740 MB，其中视频 420 MB，乐器采样 225 MB。GitHub Pages 的站点上限是 1 GB，每月流量软上限 100 GB；视频只有点播放才会下载。
 
 ## 需要知道的
 

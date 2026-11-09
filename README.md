@@ -114,7 +114,7 @@ python3 -m http.server 8000                    # preview: http://localhost:8000/
 | `demos/<name>/` | Each film's source: the picture code (`index.html` and JS), the soundtrack script `audio.py`, the timing sheet `cues.json`, and the scripts that generated the film's own assets |
 | `harness/render.mjs` | The renderer: captures every frame in headless Chrome, then muxes video and audio with ffmpeg |
 | `harness/preview.html` | Scrub through any film in the browser |
-| `lib/audio/` | mgaudio, the toolkit that synthesises the music and sound effects, plus the 103 instrument samples the 15 soundtracks use |
+| `lib/audio/` | mgaudio, the toolkit that synthesises the music and sound effects, plus the full selection of 598 CC0 instrument samples from VCSL that `samples/index.json` describes (piano, đàn tranh zither, harp, mallets, hand percussion and more) |
 | `assets/` | Textures and the HDRI the films share; a list of the fonts (the font files are not in the repository) |
 | `rubric.md`, `template.md` | A review prompt; a template for writing a prompt for a new style |
 | `docs/` | The images in this README: the cover, the diagram, the film previews and the page screenshots |
@@ -125,7 +125,7 @@ python3 -m http.server 8000                    # preview: http://localhost:8000/
 2. In the repository, open Settings → Pages → Build and deployment, choose Deploy from a branch, branch `main`, folder `/ (root)`. On a free account Pages works only for public repositories.
 3. A minute or two later, open `https://<user>.github.io/<repo>/`. The page detects the repository by itself, so "Open on GitHub" jumps to the right file; with a custom domain, put the repository URL in `<meta name="repo">` in `index.html`.
 
-The site is about 575 MB, 420 MB of it video. GitHub Pages allows 1 GB per site and a soft limit of 100 GB of traffic a month; videos download only when played.
+The site is about 740 MB, 420 MB of it video and 225 MB instrument samples. GitHub Pages allows 1 GB per site and a soft limit of 100 GB of traffic a month; videos download only when played.
 
 ## Good to know
 
