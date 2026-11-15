@@ -8,13 +8,13 @@
 每支片都附风格说明、完整提示词和全部源码。<br>
 Every film comes with its style notes, its full prompt and its complete source.
 
+<a href="#support"><img src="https://img.shields.io/badge/%E2%98%95%20%E6%94%AF%E6%8C%81%E4%BD%9C%E8%80%85-16803C?style=for-the-badge" alt="☕ 支持作者" height="32"></a>
+
 <a href="https://vincentwei1021.github.io/mg-styles-15/?lang=zh"><img src="docs/readme/cover.webp" width="100%" alt="15 种 MG 动态设计风格：15 支成片同时播放"></a>
 
 [**▶ 在线观看全部 15 支（带声音）· Watch online**](https://vincentwei1021.github.io/mg-styles-15/?lang=zh)
 
 [English](README.md) | **简体中文**
-
-[☕ 支持作者](#support)
 
 ![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/?lang=zh)
 

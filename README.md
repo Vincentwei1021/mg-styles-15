@@ -8,13 +8,13 @@
 Every film comes with its style notes, its full prompt and its complete source.<br>
 每支片都附风格说明、完整提示词和全部源码。
 
+<a href="#support"><img src="https://img.shields.io/badge/%E2%98%95%20Support%20author-16803C?style=for-the-badge" alt="☕ Support author" height="32"></a>
+
 <a href="https://vincentwei1021.github.io/mg-styles-15/"><img src="docs/readme/cover.webp" width="100%" alt="15 Motion Design Styles: all fifteen films playing side by side"></a>
 
 [**▶ Watch all 15 films with sound · 在线观看**](https://vincentwei1021.github.io/mg-styles-15/)
 
 **English** | [简体中文](README.zh-CN.md)
-
-[☕ Support this project](#support)
 
 ![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/)
 
