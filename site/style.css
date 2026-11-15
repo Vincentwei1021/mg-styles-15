@@ -37,6 +37,14 @@ button { font: inherit; color: inherit; }
 .hero h1 { margin: 18px 0 6px; font-size: clamp(40px, 6.4vw, 88px); line-height: 1.08; letter-spacing: -.01em; font-weight: 800; }
 .hero .sub { margin: 0; font-size: clamp(18px, 2vw, 24px); color: var(--ink2); }
 .hero .lede { max-width: 760px; margin: 28px 0 40px; color: var(--ink2); font-size: 16px; }
+.hero-support { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; margin: 0 0 28px; }
+.hero-support .support-invite { margin: 0; color: var(--ink2); font-size: 15px; }
+.btn.sponsor-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px;
+  padding: 10px 22px; border: 1px solid #f5c76b; border-radius: 8px; background: #f5c76b; color: #20160a;
+  font-size: 16px; line-height: 1.4; font-weight: 700; }
+.btn.sponsor-btn:hover { background: #ffdb8c; border-color: #ffdb8c; color: #20160a; }
+.btn.sponsor-btn:focus-visible { outline: 2px solid #f5c76b; outline-offset: 4px; }
+.btn.sponsor-btn:active { transform: translateY(1px); }
 .index { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .index a { display: flex; gap: 10px; align-items: baseline; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
   text-decoration: none; background: rgba(255, 255, 255, .02); transition: border-color .2s, background .2s; }
