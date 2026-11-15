@@ -14,6 +14,8 @@ Every film comes with its style notes, its full prompt and its complete source.<
 
 **English** | [简体中文](README.zh-CN.md)
 
+[☕ Support this project](#support)
+
 ![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/)
 
 </div>
@@ -139,6 +141,18 @@ The site is about 575 MB, 420 MB of it video. GitHub Pages allows 1 GB per site 
 - The code, prompts, docs and films made for this project are released under the [MIT License](LICENSE).
 - Third-party files keep their own licences. The instrument samples (VCSL), the HDRI, the paper texture, the photos and the HUD film's map data (Natural Earth) are CC0 or public domain. `site/vendor/highlight.min.js` is BSD-3-Clause ([its licence](site/vendor/highlight.LICENSE)). The glyph outlines in `demos/04-3d-render/assets/mesh/` and `demos/08-morph/glyphs.json` come from fonts under the SIL Open Font License and stay under it.
 - The font files are not in the repository and keep their own licences; [assets/fonts/README.md](assets/fonts/README.md) lists them.
+
+<a id="support"></a>
+
+## ☕ Support this project
+
+If this project helped you, you're welcome to buy me a coffee and support its continued development and maintenance.
+
+<img src="assets/wechat-sponsor.jpg" alt="WeChat sponsorship QR code" width="280">
+
+Scan with WeChat; any amount is appreciated. On a phone, save the image and select it from your album in WeChat's Scan feature.
+
+Sponsorship is entirely optional. Stars, feedback, and sharing are just as welcome. Sponsorship does not change this project's license terms.
 
 ## About
 

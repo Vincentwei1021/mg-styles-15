@@ -14,6 +14,8 @@ Every film comes with its style notes, its full prompt and its complete source.
 
 [English](README.md) | **简体中文**
 
+[☕ 支持作者](#support)
+
 ![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/?lang=zh)
 
 </div>
@@ -139,6 +141,18 @@ python3 -m http.server 8000                    # 预览：http://localhost:8000/
 - 这个项目自己做的代码、提示词、文档和成片按 [MIT 许可](LICENSE) 发布。
 - 第三方文件保留各自的许可：乐器采样（VCSL）、HDRI、纸张纹理、片中的照片，以及 HUD 那支的地图数据（Natural Earth），都是 CC0 或公有领域；`site/vendor/highlight.min.js` 是 BSD-3-Clause（[许可文本](site/vendor/highlight.LICENSE)）；`demos/04-3d-render/assets/mesh/` 和 `demos/08-morph/glyphs.json` 里的字形轮廓取自 SIL OFL 许可的字体，仍按 OFL。
 - 字体文件不在仓库里，各有各的许可，清单见 [assets/fonts/README.md](assets/fonts/README.md)。
+
+<a id="support"></a>
+
+## ☕ 支持作者
+
+如果这个项目帮到了你，欢迎请我喝杯咖啡，支持后续开发与维护。
+
+<img src="assets/wechat-sponsor.jpg" alt="微信赞助收款码" width="280">
+
+微信扫一扫，金额随意。手机查看时，可保存图片，再在微信「扫一扫」中从相册选择。
+
+赞助完全自愿，Star、反馈和分享同样感谢。赞助不改变本项目现有的许可条款。
 
 ## 关于
 
