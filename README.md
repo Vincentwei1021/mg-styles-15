@@ -16,7 +16,7 @@ Every film comes with its style notes, its full prompt and its complete source.<
 
 **English** | [简体中文](README.zh-CN.md)
 
-![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/)
+![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/) <a href="#wechat-community"><img src="https://img.shields.io/badge/WeChat%20community-07C160?style=flat&amp;logo=wechat&amp;logoColor=white" alt="WeChat community" height="20"></a>
 
 </div>
 
@@ -161,3 +161,15 @@ Sponsorship is entirely optional. Stars, feedback, and sharing are just as welco
 ## About
 
 Made by [Vincentwei1021](https://github.com/Vincentwei1021) with Claude Opus 5.5. The page is at https://vincentwei1021.github.io/mg-styles-15/ and the repository at https://github.com/Vincentwei1021/mg-styles-15. If you build on these prompts or this code, a link back is appreciated.
+
+<a id="wechat-community"></a>
+
+## 💬 WeChat community
+
+Join “Vincent 的 AI 交流群 1” to chat about AI applications, coding, and video creation.
+
+<a href="assets/wechat-group.jpg"><img src="assets/wechat-group.jpg" alt="Vincent’s AI WeChat community QR code" width="400"></a>
+
+Scan with WeChat to join. On a phone, save the image, then open WeChat’s Scan feature and select it from your album.
+
+This QR code is valid before **2026-11-25**, subject to WeChat’s notice. If it has expired, [contact Vincent on X](https://x.com/VincentWei93) for the latest way to join.
