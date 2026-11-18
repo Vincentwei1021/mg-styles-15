@@ -2,8 +2,6 @@
 
 # 15 种 MG 动态设计风格
 
-<a href="#wechat-community"><img src="https://img.shields.io/badge/%E5%BE%AE%E4%BF%A1%E7%BE%A4-07C160?style=for-the-badge&amp;logo=wechat&amp;logoColor=white" alt="微信群" height="32"></a>
-
 **15 种 MG 动态设计风格，每种一支 10 秒成片，全部由 Claude Opus 5.5 写代码做出来。**<br>
 **Fifteen styles, one 10-second film each, all made by Claude Opus 5.5 writing code.**
 
@@ -18,7 +16,7 @@ Every film comes with its style notes, its full prompt and its complete source.
 
 [English](README.md) | **简体中文**
 
-![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/?lang=zh)
+![films](https://img.shields.io/badge/films-15-ff8a3d) ![length](https://img.shields.io/badge/length-10%20s%20each-555) ![made with](https://img.shields.io/badge/made%20with-Claude%20Opus%205.5-d97757) [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-2ea44f)](https://vincentwei1021.github.io/mg-styles-15/?lang=zh) <a href="#wechat-community"><img src="https://img.shields.io/badge/%E5%BE%AE%E4%BF%A1%E7%BE%A4-07C160?style=flat&amp;logo=wechat&amp;logoColor=white" alt="微信群" height="20"></a>
 
 </div>
 
