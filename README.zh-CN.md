@@ -2,6 +2,8 @@
 
 # 15 种 MG 动态设计风格
 
+<a href="#wechat-community"><img src="https://img.shields.io/badge/%E5%BE%AE%E4%BF%A1%E7%BE%A4-07C160?style=for-the-badge&amp;logo=wechat&amp;logoColor=white" alt="微信群" height="32"></a>
+
 **15 种 MG 动态设计风格，每种一支 10 秒成片，全部由 Claude Opus 5.5 写代码做出来。**<br>
 **Fifteen styles, one 10-second film each, all made by Claude Opus 5.5 writing code.**
 
@@ -161,3 +163,15 @@ python3 -m http.server 8000                    # 预览：http://localhost:8000/
 ## 关于
 
 由 [Vincentwei1021](https://github.com/Vincentwei1021) 和 Claude Opus 5.5 一起完成。网页在 https://vincentwei1021.github.io/mg-styles-15/?lang=zh ，仓库在 https://github.com/Vincentwei1021/mg-styles-15 。如果你在这些提示词或代码的基础上做东西，欢迎附上这里的链接。
+
+<a id="wechat-community"></a>
+
+## 💬 微信群
+
+欢迎加入「Vincent 的 AI 交流群 1」，一起交流 AI 应用、编程和视频创作。
+
+<a href="assets/wechat-group.jpg"><img src="assets/wechat-group.jpg" alt="Vincent 的 AI 交流群 1 微信入群二维码" width="400"></a>
+
+用微信扫一扫加入。手机查看时，可保存图片，再在微信「扫一扫」中从相册选择。
+
+此二维码在 **2026-11-25 前**有效，以微信提示为准。若已失效，可[通过 X 联系 Vincent](https://x.com/VincentWei93)获取最新入群方式。
