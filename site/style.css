@@ -45,6 +45,9 @@ button { font: inherit; color: inherit; }
 .btn.sponsor-btn:hover { background: #ffdb8c; border-color: #ffdb8c; color: #20160a; }
 .btn.sponsor-btn:focus-visible { outline: 2px solid #f5c76b; outline-offset: 4px; }
 .btn.sponsor-btn:active { transform: translateY(1px); }
+.btn.community-btn { border-color: #07c160; background: transparent; color: var(--ink); }
+.btn.community-btn:hover { border-color: #07c160; background: rgba(7, 193, 96, .14); color: var(--ink); }
+.btn.community-btn:focus-visible { outline-color: #07c160; }
 .index { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .index a { display: flex; gap: 10px; align-items: baseline; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
   text-decoration: none; background: rgba(255, 255, 255, .02); transition: border-color .2s, background .2s; }
